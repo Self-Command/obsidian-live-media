@@ -8,8 +8,8 @@ await fs.mkdir('dist', {recursive: true});
 await fs.mkdir('build', {recursive: true});
 await build({entryPoints: ['src/engine/worker.ts'], bundle: true, format: 'iife', outfile: 'build/worker.js', target: 'es2022', minify: true});
 const inputs = {
-  worker: 'build/worker.js', core: 'node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.js',
-  wasm: 'node_modules/@ffmpeg/core/dist/umd/ffmpeg-core.wasm',
+  worker: 'build/worker.js', core: 'codecs/generated/ffmpeg-core.js',
+  wasm: 'codecs/generated/ffmpeg-core.wasm',
   hdr: 'codecs/generated/live_hdr.js', hdrWasm: 'codecs/generated/live_hdr.wasm'
 };
 const assets = {};

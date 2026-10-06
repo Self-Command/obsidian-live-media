@@ -1,2 +1,2 @@
 import {defineConfig} from 'vitest/config';
-export default defineConfig({test:{include:['tests/unit/**/*.test.ts'],environment:'node'}});
+export default defineConfig({resolve:{alias:{'virtual:codec-assets':new URL('./tests/codec-assets-stub.ts',import.meta.url).pathname}},test:{include:['tests/unit/**/*.test.ts'],environment:'node'}});

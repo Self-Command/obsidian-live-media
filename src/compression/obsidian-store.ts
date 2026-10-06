@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {TFile,type App} from 'obsidian';
+import {TFile,FileSystemAdapter,Platform,type App} from 'obsidian';
 import {safePath} from '../settings/model';
 import type {Store} from './batch';
 export class VaultStore implements Store {
@@ -16,4 +16,8 @@ export class VaultStore implements Store {
   async hiddenRead(path:string):Promise<string>{return this.app.vault.adapter.read(safePath(path,true));}
   async hiddenWrite(path:string,text:string):Promise<void>{safePath(path,true);await this.parents(path);await this.app.vault.adapter.write(path,text);}
   async backup(path:string,bytes:Uint8Array):Promise<void>{safePath(path,true);if(await this.exists(path))throw new Error('Backup collision');await this.parents(path);await this.app.vault.adapter.writeBinary(path,bytes.slice().buffer);}
+  async availableBytes():Promise<number|undefined>{
+    if(!Platform.isDesktopApp||!(this.app.vault.adapter instanceof FileSystemAdapter))return undefined;
+    try{const fs=await import('node:fs/promises');const stat=await fs.statfs(this.app.vault.adapter.getBasePath());return stat.bavail*stat.bsize;}catch{return undefined;}
+  }
 }

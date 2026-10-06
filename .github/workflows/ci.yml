@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -30,7 +30,15 @@ jobs:
         run: |
           source build-emsdk/emsdk_env.sh
           bash scripts/build-codecs.sh
+      - name: Build pinned minimal FFmpeg core
+        run: |
+          build-emsdk/emsdk install 3.1.40
+          build-emsdk/emsdk activate 3.1.40
+          source build-emsdk/emsdk_env.sh
+          bash scripts/build-ffmpeg.sh
       - run: npm run build
+      - name: Collect codec source and licenses
+        run: python3 scripts/source-archive.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: build-${{ github.sha }}
@@ -38,7 +46,7 @@ jobs:
           if-no-files-found: error
       - name: Corresponding codec source and build inputs
         run: |
-          tar --exclude='.git' -czf codec-corresponding-source.tar.gz build/codec-sources codecs scripts/build-codecs.sh package-lock.json
+          tar --exclude='.git' --exclude='*.o' --exclude='*.a' -czf codec-corresponding-source.tar.gz build/codec-sources codecs scripts/build-codecs.sh scripts/build-ffmpeg.sh package-lock.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: corresponding-source-${{ github.sha }}
@@ -67,7 +75,9 @@ jobs:
       - name: Candidate install package from tested artifact
         run: |
           mkdir candidate
-          cp dist/main.js dist/manifest.json dist/styles.css dist/provenance.json candidate/
+          cp dist/main.js dist/manifest.json dist/styles.css dist/provenance.json LICENSE candidate/
+          cp -r dist/licenses candidate/
+          cp codecs/BUILDING.md candidate/CODEC-BUILDING.md
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: candidate-${{ github.sha }}
