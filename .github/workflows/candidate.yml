@@ -1,0 +1,52 @@
+name: Publish tested candidate without rebuilding
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful CI run ID
+        required: true
+      commit:
+        description: Full SHA from that run
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.run_id }}
+      SOURCE_COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Download same tested install bytes and corresponding source
+        run: |
+          gh run view "$SOURCE_RUN" --json conclusion,headSha > run.json
+          gh run download "$SOURCE_RUN" --name "candidate-$SOURCE_COMMIT" --dir candidate
+          gh run download "$SOURCE_RUN" --name "corresponding-source-$SOURCE_COMMIT" --dir corresponding-source
+      - name: Verify identity and hashes before publication
+        run: |
+          python3 - <<'PY'
+          import pathlib,json,hashlib,os,re
+          root=pathlib.Path('candidate');proof=json.loads((root/'provenance.json').read_text());run=json.loads(pathlib.Path('run.json').read_text())
+          assert re.fullmatch('[0-9a-f]{40}',os.environ['SOURCE_COMMIT'])
+          assert run['conclusion']=='success' and run['headSha']==proof['commit']==os.environ['SOURCE_COMMIT']
+          assert proof['runId']==os.environ['SOURCE_RUN']
+          for f in ['main.js','manifest.json','styles.css']:
+              assert hashlib.sha256((root/f).read_bytes()).hexdigest()==proof['files'][f]['sha256']
+          assert json.loads((root/'manifest.json').read_text())['id']=='live-media'
+          PY
+      - name: Publish explicit prerelease with no compilation
+        run: |
+          cp README.md candidate/README.md
+          (cd candidate && zip -qr ../live-media-candidate.zip .)
+          cat > candidate-notes.md <<'EOF'
+          Testing candidate, not a device-certified release. Obsidian, Android/iOS and phone-gallery acceptance are pending. Apple compression is off by default. Unverified formats are protected and skipped.
+
+          候选测试包：保持照片外观、自动静音、无播放器控件。默认保存副本。请在独立测试库验证；实际 Obsidian、手机和相册验收尚未确认。
+
+          The three install files are the exact bytes downloaded and tested by the referenced successful CI run. No rebuild. The source archive and licenses accompany this candidate.
+          EOF
+          printf '\nSource commit: %s\nCI run: https://github.com/%s/actions/runs/%s\n' "$SOURCE_COMMIT" "$GITHUB_REPOSITORY" "$SOURCE_RUN" >> candidate-notes.md
+          gh release create "candidate-${SOURCE_COMMIT:0:12}" live-media-candidate.zip candidate/main.js candidate/manifest.json candidate/styles.css candidate/provenance.json corresponding-source/codec-corresponding-source.tar.gz --prerelease --target "$SOURCE_COMMIT" --title "Live Media candidate ${SOURCE_COMMIT:0:12}" --notes-file candidate-notes.md
