@@ -31,11 +31,12 @@ export class Photo {
     const parent=img.parentElement;if(!parent)throw new Error('Detached image');
     this.parentPosition=parent.style.position;this.imageOpacity=img.style.opacity;
     if(getComputedStyle(parent).position==='static')parent.style.position='relative';
-    this.layer=document.createElement('span');this.layer.className='live-media-photo-layer';
-    this.video=document.createElement('video');this.video.controls=false;this.video.playsInline=true;
+    const doc=img.ownerDocument;
+    this.layer=doc.createElement('span');this.layer.className='live-media-photo-layer';
+    this.video=doc.createElement('video');this.video.controls=false;this.video.playsInline=true;
     this.video.disablePictureInPicture=true;this.video.disableRemotePlayback=true;this.video.preload='metadata';this.video.src=url;
     this.video.muted=true;this.video.setAttribute('aria-hidden','true');this.video.tabIndex=-1;
-    this.badge=document.createElement('span');this.badge.className='live-media-badge';
+    this.badge=doc.createElement('span');this.badge.className='live-media-badge';
     this.layer.append(this.video,this.badge);parent.append(this.layer);
     this.tabIndex=img.getAttribute('tabindex');this.aria=img.getAttribute('aria-label');this.role=img.getAttribute('role');
     const listen=<K extends keyof HTMLElementEventMap>(target:HTMLElement,name:K,fn:(e:HTMLElementEventMap[K])=>void,capture=false)=>target.addEventListener(name,fn as EventListener,{signal:this.abort.signal,capture});
@@ -49,6 +50,21 @@ export class Photo {
     listen(img,'dragstart',()=>{this.moved=true;});
     listen(img,'click',e=>this.click(e),true);
     listen(img,'dblclick',e=>{if(this.config()['manual.gesture']==='double-click'&&!this.moved&&!this.passthrough(e)){e.preventDefault();e.stopImmediatePropagation();this.action();}},true);
+    // A window capture listener runs before document-level image viewers. It is strictly
+    // scoped to this verified image; ordinary images, menus and captions keep host behavior.
+    const win=doc.defaultView;
+    win?.addEventListener('click',e=>{
+      if(e.target!==img||this.moved||this.passthrough(e))return;
+      const c=this.config();if(c['host.clickPriority']==='live'&&c['manual.gesture']==='double-click'&&c['manual.enabled']){
+        e.preventDefault();e.stopImmediatePropagation();return;
+      }
+      this.click(e);
+    },{capture:true,signal:this.abort.signal});
+    win?.addEventListener('dblclick',e=>{
+      if(e.target===img&&this.config()['manual.gesture']==='double-click'&&this.config()['manual.enabled']&&!this.moved&&!this.passthrough(e)){
+        e.preventDefault();e.stopImmediatePropagation();this.action();
+      }
+    },{capture:true,signal:this.abort.signal});
     listen(img,'keydown',e=>{if(!this.config()['accessibility.keyboard'])return;
       if(e.key==='Escape'){this.stop();e.preventDefault();}else if(e.key==='Enter'||e.key===' '){e.preventDefault();this.action();}});
     listen(img,'mouseenter',()=>{const c=this.config();if(c['auto.hover']&&c['auto.mode']!=='off')this.schedule(()=>{if(img.matches(':hover'))void this.play(false);},Number(c['auto.hoverDelayMs']));});
@@ -122,7 +138,7 @@ export class Photo {
     }
     if(!this.playing)return;
     const show=()=>{if(this.playing){this.video.style.opacity='1';this.layer.classList.add('is-playing');}};
-    if('requestVideoFrameCallback'in this.video)this.video.requestVideoFrameCallback(show);else requestAnimationFrame(show);
+    if('requestVideoFrameCallback'in this.video)this.video.requestVideoFrameCallback(show);else this.img.ownerDocument.defaultView?.requestAnimationFrame(show);
     if(!manual){this.remember();if(c['auto.durationMs']!=='full')this.schedule(()=>{if(!this.manual)this.stop();},Number(c['auto.durationMs']));}
   }
   private ended():void {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import {ascii, boxes, jpegSegments, u16, u32, type JpegSegment} from './bytes';
+import {xmpTags,namespaces,attr,cameraNamespace,itemNamespace} from './xmp';
 export interface MediaProbe {
   format: string; live: boolean; hdr: boolean; width?: number; height?: number;
   videoStart?: number; photoEnd?: number; timestamp?: string; xmp?: JpegSegment;
@@ -18,29 +19,32 @@ export function probe(b: Uint8Array): MediaProbe {
       result.hdr=/hdrgm:|hdr-gain-map|urn:iso:std:iso:ts:21496|HDRGainMap/.test(all)||segs.some(s=>s.marker===0xe2&&ascii(b,s.payload,4)==='MPF\0');
       for(const s of xmps){
         const xml=ascii(b,s.payload+29,s.end-s.payload-29);
-        if(/<!DOCTYPE|<!ENTITY/.test(xml))throw new Error('Unsafe XMP');
-        const isMotion=/(?:MotionPhoto|MicroVideo)(?:\s*=\s*["']1["']|>1<)/.test(xml);
+        const tags=xmpTags(xml),ns=namespaces(tags);
+        const values=(name:string)=>tags.map(t=>attr(t,ns,cameraNamespace,name)).filter((v):v is string=>v!==undefined);
+        const isMotion=values('MotionPhoto').includes('1')||values('MicroVideo').includes('1');
         if(!isMotion)continue;
         if(result.xmp)throw new Error('Multiple motion XMP packets');
         result.xmp=s;
         let length: number | undefined;
-        const offset=xml.match(/(?:MicroVideoOffset|MotionPhotoOffset)\s*=\s*["'](\d+)["']/);
-        if(offset)length=Number(offset[1]);
-        const items=[...xml.matchAll(/<[^>]*\bItem\b[^>]*>/g)].map(m=>m[0]);
-        const motion=items.filter(item=>/Semantic\s*=\s*["']MotionPhoto["']/.test(item));
+        const offsets=[...values('MicroVideoOffset'),...values('MotionPhotoOffset')];
+        if(offsets.length>1&&new Set(offsets).size>1)throw new Error('Conflicting offsets');
+        if(offsets[0]){if(!/^\d+$/.test(offsets[0]))throw new Error('Invalid offset');length=Number(offsets[0]);}
+        const motion=tags.filter(t=>attr(t,ns,itemNamespace,'Semantic')==='MotionPhoto');
         if(motion.length>1)throw new Error('Multiple motion items');
         if(motion[0]){
-          const len=motion[0].match(/Length\s*=\s*["'](\d+)["']/);if(!len)throw new Error('Missing motion item length');
-          if(length!==undefined&&length!==Number(len[1]))throw new Error('Conflicting motion offsets');
-          length=Number(len[1]);
-          if(!/Mime\s*=\s*["']video\/mp4["']/.test(motion[0]))throw new Error('Unsupported motion MIME');
+          const len=attr(motion[0],ns,itemNamespace,'Length');if(!len||!/^\d+$/.test(len))throw new Error('Missing motion item length');
+          if(length!==undefined&&length!==Number(len))throw new Error('Conflicting motion offsets');
+          length=Number(len);
+          if(attr(motion[0],ns,itemNamespace,'Mime')!=='video/mp4')throw new Error('Unsupported motion MIME');
         }
         if(!length||!Number.isSafeInteger(length)||length>b.length-eoi)throw new Error('Invalid motion length');
         const start=b.length-length;
         const videoBoxes=boxes(b,start,b.length);
         if(videoBoxes[0]?.type!=='ftyp'||!videoBoxes.some(s=>s.type==='moov')||!videoBoxes.some(s=>s.type==='mdat'))throw new Error('Incomplete motion MP4');
         result.live=true;result.videoStart=start;result.photoEnd=start;
-        result.timestamp=xml.match(/(?:MotionPhotoPresentationTimestampUs|MicroVideoPresentationTimestampUs)\s*=\s*["'](-?\d+)["']/)?.[1];
+        const time=[...values('MotionPhotoPresentationTimestampUs'),...values('MicroVideoPresentationTimestampUs')];
+        if(time.length>1&&new Set(time).size>1)throw new Error('Conflicting cover time');
+        if(time[0]&&!/^-?\d{1,20}$/.test(time[0]))throw new Error('Invalid cover time');result.timestamp=time[0];
       }
       if(result.live)result.capability='motion';
       else if(eoi===b.length)result.capability=result.hdr?'protected':'static';

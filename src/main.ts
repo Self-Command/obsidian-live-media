@@ -35,6 +35,9 @@ export default class LiveMedia extends Plugin {
       if(!Platform.isDesktopApp||!c['native.enabled']||localStorage.getItem(this.nativeKey())!==path)return undefined;
       return new NativeEngine(path,()=>localStorage.getItem(this.nativeKey())===path);
     }));
+    void this.batch.recovery(this.model.effective()).then(logs=>{
+      if(logs.some(j=>['backed-up','writing','failed'].includes(j.state)))this.notify('Live Media 有未完成替换记录，请运行“检查日志并恢复原件”。不会自动继续写入。');
+    }).catch(()=>this.notify('Live Media 的历史报告无法验证，请检查恢复目录。'));
     this.addSettingTab(new LiveSettingsTab(this.app,this,this.model,this.save,()=>this.hosts.settingsChanged()));
     this.registerMarkdownPostProcessor((el,ctx)=>{ctx.addChild(this.hosts.attach(el,ctx.sourcePath,'reading'));});
     const manager=this.hosts;

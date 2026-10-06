@@ -6,7 +6,7 @@ import {hash} from '../../src/media/bytes';
 import {defaults} from '../../src/settings/model';
 function memory(){
   const files=new Map<string,Uint8Array>(),logs=new Map<string,string>();
-  const store:Store={read:async p=>{const b=files.get(p);if(!b)throw new Error('Missing');return b.slice();},exists:async p=>files.has(p),
+  const store:Store={read:async p=>{const b=files.get(p);if(!b)throw new Error('Missing');return b.slice();},exists:async p=>files.has(p)||logs.has(p),
     create:async(p,b)=>{if(files.has(p))throw new Error('Collision');files.set(p,b.slice());},replace:async(p,b)=>{files.set(p,b.slice());},
     hiddenRead:async p=>{const t=logs.get(p);if(!t)throw new Error('Missing');return t;},hiddenWrite:async(p,t)=>{logs.set(p,t);},backup:async(p,b)=>{if(files.has(p))throw new Error('Collision');files.set(p,b.slice());}};
   const engine={destroy:vi.fn()};const compressor={engine,encode:vi.fn()}as unknown as Compressor;

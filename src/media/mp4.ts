@@ -87,3 +87,9 @@ export async function validateVideoPreservation(before: Uint8Array, after: Uint8
   const protectedText=ascii(before).match(/com\.apple\.quicktime\.[\w.-]+/g);
   if(protectedText?.length&&!allowVerifiedApple)throw new Error('Apple QuickTime identity requires verified pair writer');
 }
+export function validateCoverTime(video:Uint8Array,timestamp:string|undefined):void {
+  if(timestamp===undefined||timestamp==='-1')return;
+  const time=BigInt(timestamp);if(time<0n)throw new Error('Invalid cover timestamp');
+  const track=tracks(video).find(t=>t.kind==='vide');if(!track)throw new Error('No video track');
+  if(time*BigInt(track.timescale)>BigInt(track.duration)*1000000n)throw new Error('Cover timestamp lies outside the movie');
+}

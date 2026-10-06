@@ -7,7 +7,7 @@ test('real SDR and HDR motion files preserve decode, cover time, audio, frames a
     const h=(window as any).liveMediaHarness,e=h.engine;await e.load();
     const jpg=await e.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
     const video=(window as any).audioFixture as Uint8Array;
-    const xml=`<rdf GCamera:MotionPhoto="1" GCamera:MotionPhotoPresentationTimestampUs="500000"><Container:Item Item:Semantic="Primary" Item:Mime="image/jpeg"/><Container:Item Item:Semantic="MotionPhoto" Item:Mime="video/mp4" Item:Length="${video.length}"/>                                          </rdf>`;
+    const xml=`<rdf xmlns:GCamera="http://ns.google.com/photos/1.0/camera/" xmlns:Container="http://ns.google.com/photos/1.0/container/" xmlns:Item="http://ns.google.com/photos/1.0/container/item/" GCamera:MotionPhoto="1" GCamera:MotionPhotoPresentationTimestampUs="500000"><Container:Item Item:Semantic="Primary" Item:Mime="image/jpeg"/><Container:Item Item:Semantic="MotionPhoto" Item:Mime="video/mp4" Item:Length="${video.length}"/>                                          </rdf>`;
     const payload=new TextEncoder().encode('http://ns.adobe.com/xap/1.0/\0'+xml),segment=new Uint8Array(payload.length+4);segment.set([255,225]);new DataView(segment.buffer).setUint16(2,payload.length+2);segment.set(payload,4);
     const motion=h.concat(jpg.subarray(0,2),segment,jpg.subarray(2),video);const c=h.defaults();c['compression.minSavingPercent']=0;c['compression.ffmpegCrf']=30;c['compression.videoQuality']='custom';c['compression.staticStrategy']='reencode';
     const compressor=new h.Compressor(e);

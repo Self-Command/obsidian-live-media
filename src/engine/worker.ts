@@ -65,13 +65,15 @@ scope.onmessage = async (event) => {
           core.reset();
         }
       } else if (op === 'validate') {
-        core.FS.writeFile('verify.media', data.input as Uint8Array);
+        const input=data.input as Uint8Array;
+        const ext=input[0]===137?'png':input[0]===255?'jpg':input[0]===82?'webp':'mp4';
+        const file='verify.'+ext;tail='';core.FS.writeFile(file,input);
         try {
           core.setTimeout(120000);
-          core.exec('-v', 'error', '-i', 'verify.media', '-map', '0:v:0', '-c:v', 'rawvideo', '-f', 'null', '-');
-          if (core.ret !== 0) throw new Error('Full video/image decode failed');
+          core.exec('-v', 'error', '-i', file, '-map', '0:v:0', '-c:v', 'rawvideo', '-f', 'null', '-');
+          if (core.ret !== 0) throw new Error('Full video/image decode failed: '+tail);
           result = true;
-        } finally {core.reset(); core.FS.unlink('verify.media');}
+        } finally {core.reset(); core.FS.unlink(file);}
       } else if (op === 'hdr-probe' || op === 'hdr-reencode') {
         const b = data.input as Uint8Array;
         const p = hdr._malloc(b.length);

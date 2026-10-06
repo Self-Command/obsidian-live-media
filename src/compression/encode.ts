@@ -2,7 +2,7 @@
 import {OfflineEngine} from '../engine/client';
 import {probe, type MediaProbe} from '../media/probe';
 import {replaceMotionVideo} from '../media/motion';
-import {validateVideoPreservation} from '../media/mp4';
+import {validateVideoPreservation,validateCoverTime} from '../media/mp4';
 import {ascii, concat, equal, jpegSegments} from '../media/bytes';
 import type {Config} from '../settings/model';
 import {exifOrientation,minimalExif,scrubGpsSegment,applePhotoId} from '../media/exif';
@@ -30,6 +30,7 @@ export class Compressor {
       if(before.live){
         if(before.videoStart===undefined)throw new ProtectedMedia('No trusted video boundary');
         const video=input.slice(before.videoStart);
+        validateCoverTime(video,before.timestamp);
         await backend.validate(video);
         const lossless=c['compression.preset']==='lossless'||!c['compression.allowLossy'];
         const args=['-v','error','-noautorotate','-i','$INPUT','-map','0','-map_metadata','0'];

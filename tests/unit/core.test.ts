@@ -47,17 +47,17 @@ describe('reference evidence',()=>{
 describe('bounded format parsing and XMP resource preservation',()=>{
   it('rejects malformed box sizes and truncation',()=>{expect(()=>boxes(Uint8Array.of(0,0,0,7,102,116,121,112))).toThrow();expect(()=>jpegSegments(Uint8Array.of(255,216,255,225,255,255))).toThrow();});
   it('changes only the semantic motion length, not gain-map length or cover time',()=>{
-    const xml=`<rdf GCamera:MotionPhoto="1" GCamera:MotionPhotoPresentationTimestampUs="123456"><Container:Item Item:Semantic="GainMap" Item:Length="1234"/><Container:Item Item:Semantic="MotionPhoto" Item:Mime="video/mp4" Item:Length="${video.length}"/>       </rdf>`;
+    const xml=`<rdf xmlns:GCamera="http://ns.google.com/photos/1.0/camera/" xmlns:Container="http://ns.google.com/photos/1.0/container/" xmlns:Item="http://ns.google.com/photos/1.0/container/item/" GCamera:MotionPhoto="1" GCamera:MotionPhotoPresentationTimestampUs="123456"><Container:Item Item:Semantic="GainMap" Item:Length="1234"/><Container:Item Item:Semantic="MotionPhoto" Item:Mime="video/mp4" Item:Length="${video.length}"/>       </rdf>`;
     const original=jpeg(xml,video);expect(probe(original).live).toBe(true);
     const newVideo=concat(box('ftyp',utf('isom0000')),box('moov',new Uint8Array()),box('mdat',utf('smaller')));
     const out=replaceMotionVideo(original,newVideo);expect(probe(out).timestamp).toBe('123456');expect(new TextDecoder().decode(out)).toContain('Item:Length="1234"');
     expect(probe(out).videoStart).toBe(probe(original).videoStart);
   });
   it('does not interpret a gain map length as a video offset',()=>{
-    expect(probe(jpeg('<rdf GCamera:MotionPhoto="1"><Container:Item Item:Semantic="GainMap" Item:Length="12"/></rdf>',video)).capability).toBe('protected');
+    expect(probe(jpeg('<rdf xmlns:GCamera="http://ns.google.com/photos/1.0/camera/" xmlns:Container="http://ns.google.com/photos/1.0/container/" xmlns:Item="http://ns.google.com/photos/1.0/container/item/" GCamera:MotionPhoto="1"><Container:Item Item:Semantic="GainMap" Item:Length="12"/></rdf>',video)).capability).toBe('protected');
   });
   it('rejects unsafe XML and conflicting legacy offsets',()=>{
-    expect(probe(jpeg('<!DOCTYPE foo><rdf GCamera:MicroVideo="1" GCamera:MicroVideoOffset="20"/>',video)).live).toBe(false);
+    expect(probe(jpeg('<!DOCTYPE foo><rdf xmlns:GCamera="http://ns.google.com/photos/1.0/camera/" xmlns:Container="http://ns.google.com/photos/1.0/container/" xmlns:Item="http://ns.google.com/photos/1.0/container/item/" GCamera:MicroVideo="1" GCamera:MicroVideoOffset="20"/>',video)).live).toBe(false);
   });
 });
 describe('byte cache ownership and budgets',()=>{

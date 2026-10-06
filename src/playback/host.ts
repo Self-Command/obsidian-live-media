@@ -29,6 +29,7 @@ export class HostSession extends MarkdownRenderChild {
   private observer?:MutationObserver;private visibility?:IntersectionObserver;
   private photos=new Map<HTMLImageElement,{photo:Photo;path:string}>();private waiting=new Set<HTMLImageElement>();private generation=0;private closed=false;
   private inflight=0;private queue:Array<()=>Promise<void>>=[];
+  private negatives=new WeakMap<HTMLImageElement,string>();
   constructor(private manager:HostManager,private root:HTMLElement,private source:string,private kind:'reading'|'preview'){super(root);}
   start():void {
     this.load();this.scan();
@@ -40,7 +41,7 @@ export class HostSession extends MarkdownRenderChild {
   private scan():void {
     const c=this.manager.model.effective();
     if((this.kind==='reading'&&!c['render.reading'])||(this.kind==='preview'&&!c['render.livePreview']))return;
-    for(const [img,value]of this.photos)if(!img.isConnected||!this.root.contains(img)){value.photo.destroy();this.photos.delete(img);}
+    for(const [img,value]of this.photos)if(!img.isConnected||!this.root.contains(img)||this.manager.index.rendered(img,this.source).path!==value.path){value.photo.destroy();this.photos.delete(img);}
     const note=this.manager.app.vault.getAbstractFileByPath(this.source);
     const noteOverrides=note instanceof TFile?this.manager.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;
     for(const img of this.root.querySelectorAll<HTMLImageElement>('img')){
@@ -50,6 +51,8 @@ export class HostSession extends MarkdownRenderChild {
       if(gallery&&(!c['render.gallery']||overrides['simple-gallery']==='disabled'))continue;
       const ref=this.manager.index.rendered(img,this.source);if(!ref.path)continue;
       const file=this.manager.app.vault.getAbstractFileByPath(ref.path);if(!(file instanceof TFile)||!this.manager.index.eligible(file))continue;
+      const identity=file.path+'\0'+file.stat.mtime+'\0'+file.stat.size;
+      if(this.negatives.get(img)===identity)continue;
       this.waiting.add(img);const generation=this.generation;
       const load=()=>this.enqueue(async()=>{
         let release:(()=>void)|undefined;let url:string|undefined;
@@ -75,7 +78,8 @@ export class HostSession extends MarkdownRenderChild {
               }
             }
           }
-          if(!video||this.closed||generation!==this.generation||!img.isConnected)return;
+          if(!video){this.negatives.set(img,identity);return;}
+          if(this.closed||generation!==this.generation||!img.isConnected||this.manager.index.rendered(img,this.source).path!==file.path)return;
           release=this.manager.cache.retain(key,Number(settings['performance.warmSeconds']));url=URL.createObjectURL(new Blob([video.slice().buffer],{type:'video/mp4'}));
           const finalURL=url,finalRelease=release;
           const photo=new Photo(img,url,()=>{
@@ -101,8 +105,12 @@ export class HostSession extends MarkdownRenderChild {
       }
     }
   }
-  refresh():void {for(const {photo}of this.photos.values())photo.refresh();this.scan();}
-  invalidate(path:string):void {this.generation++;for(const [img,value]of this.photos)if(value.path===path){value.photo.destroy();this.photos.delete(img);}this.waiting.clear();this.scan();}
+  refresh():void {const c=this.manager.model.effective();this.negatives=new WeakMap();
+    if((this.kind==='reading'&&!c['render.reading'])||(this.kind==='preview'&&!c['render.livePreview'])){
+      this.generation++;for(const {photo}of this.photos.values())photo.destroy();this.photos.clear();this.waiting.clear();return;
+    }
+    for(const {photo}of this.photos.values())photo.refresh();this.scan();}
+  invalidate(path:string):void {this.generation++;this.negatives=new WeakMap();for(const [img,value]of this.photos)if(value.path===path){value.photo.destroy();this.photos.delete(img);}this.waiting.clear();this.scan();}
   destroy():void {this.unload();}
   override onunload():void {if(this.closed)return;this.closed=true;this.generation++;this.observer?.disconnect();this.visibility?.disconnect();this.queue=[];
     for(const value of this.photos.values())value.photo.destroy();this.photos.clear();this.waiting.clear();this.manager.forget(this);}

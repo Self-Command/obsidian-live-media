@@ -28,9 +28,11 @@ export class ScanModal extends Modal {
     try{
       if(this.range==='current-note'){
         const file=this.app.workspace.getActiveFile();if(!file)throw new Error('Open a note first');
+        const editor=this.app.workspace.activeEditor;
+        if(editor?.file?.path===file.path&&editor.editor&&editor.editor.getValue()!==await this.app.vault.read(file))throw new Error('当前文章有未保存编辑。先保存，再重新检测，避免使用磁盘旧正文。');
         this.refs=await this.index.note(file,this.abort.signal);
         // Rendered nodes contribute dynamic identities only; do not promote them to source references.
-        if(c['detect.rendered'])for(const img of this.app.workspace.containerEl.querySelectorAll<HTMLImageElement>('img')){
+        if(c['detect.rendered'])for(const img of (this.app.workspace.getMostRecentLeaf()?.view.containerEl??this.app.workspace.containerEl).querySelectorAll<HTMLImageElement>('img')){
           const ref=this.index.rendered(img,file.path);if(ref.path)this.refs.push(ref);
         }
         if(c['scope.embeddedNotes'])for(const ref of [...this.refs]){
@@ -60,7 +62,7 @@ export class ScanModal extends Modal {
       if(this.abort.signal.aborted)return;list.empty();
       if(!refs.length){list.createEl('p',{text:'没有可处理的库内图片。选定文件范围使用文件菜单；未知 URL 不猜测原件。'});return;}
       for(const ref of refs){const path=ref.path!,shared=this.shared.get(path)??[];const skip=shared.length>1&&c['compression.includeShared']==='skip';
-        const chosen=!skip&&(ref.evidence==='direct'||(ref.evidence==='dynamic'&&!!c['scope.dynamicSelected']));if(chosen)this.selected.add(path);
+        const chosen=!skip&&shared.length<=1&&(ref.evidence==='direct'||(ref.evidence==='dynamic'&&!!c['scope.dynamicSelected']));if(chosen)this.selected.add(path);
         const row=new Setting(list).setName(path).setDesc(`${ref.evidence} · ${ref.origin}${shared.length>1?' · 共享于 '+shared.join(', '):''}${skip?' · 已按设置跳过':''}`);
         row.addToggle(t=>t.setValue(chosen).setDisabled(skip).onChange(v=>{if(v)this.selected.add(path);else this.selected.delete(path);}));
       }
@@ -130,7 +132,7 @@ export class RecoveryModal extends Modal {
       for(const j of logs){const expired=this.config['storage.backupRetention']==='manual-days'&&Date.now()-j.timestamp>Number(this.config['storage.backupDays'])*86400000;
         new Setting(this.contentEl).setName(j.source).setDesc(j.state+(expired?' · 达到保留天数，仅供主动检查':''))
           .addButton(b=>b.setButtonText('恢复').onClick(()=>{void this.batch.restore(j,this.config).then(()=>new Notice('Original restored')).catch(e=>new Notice(String(e)));}));}
-    });
+    }).catch(e=>this.contentEl.createEl('p',{text:String(e)}));
   }
   override onClose():void {this.contentEl.empty();}
 }

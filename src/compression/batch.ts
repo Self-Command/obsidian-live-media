@@ -25,27 +25,32 @@ export class BatchService {
   async prepare(paths:string[],config:Config,onProgress?:(item:Prepared)=>void):Promise<Prepared[]> {
     if(this.busy)throw new Error('Batch already active');this.busy=true;this.controller=new AbortController();
     const result:Prepared[]=[];const settingsHash=await hash(new TextEncoder().encode(JSON.stringify(config)));
+    let previewBytes=0;const previewBudget=Math.max(Number(config['performance.cacheMiB'])*1048576,Number(config['performance.maxInputMiB'])*1048576*2);
     try{
       for(const path of [...new Set(paths)]){
         if(this.controller.signal.aborted)break;safePath(path);
         const item:Prepared={path,input:new Uint8Array(),fingerprint:'',settingsHash};
         try{
           item.input=await this.store.read(path);item.fingerprint=await hash(item.input);
+          if(previewBytes+item.input.length*2>previewBudget){item.input=new Uint8Array();throw new ProtectedMedia('Batch preview memory budget reached; select a smaller range');}
           const free=await this.store.availableBytes?.();
           if(free!==undefined&&free<item.input.length*4+Number(config['storage.diskReserveMiB'])*1048576)throw new ProtectedMedia('Insufficient free space reserve');
           const history=await this.findHistory(path,config);
           if(config['compression.repeated']==='skip-owned'&&history.some(j=>j.state==='committed'&&j.outputHash===item.fingerprint))throw new ProtectedMedia('Previously compressed by Live Media');
           item.encoded=await this.compressor.encode(item.input,path.split('.').at(-1)!,config,this.controller.signal);
+          previewBytes+=item.input.length+item.encoded.bytes.length;
         }catch(e){item.reason=String(e);}
+        if(!item.encoded)item.input=new Uint8Array();
         result.push(item);onProgress?.(item);
       }return result;
     }finally{this.busy=false;this.controller=undefined;}
   }
   private journalPath(id:string,c:Config):string{return safePath(String(c['storage.reportDirectory'])+'/'+id+'.json',true);}
   private async findHistory(path:string,c:Config):Promise<Journal[]>{
-    try{const index=JSON.parse(await this.store.hiddenRead(String(c['storage.reportDirectory'])+'/index.json')) as string[];
+    const indexPath=String(c['storage.reportDirectory'])+'/index.json';if(!await this.store.exists(indexPath))return [];
+    try{const index=JSON.parse(await this.store.hiddenRead(indexPath)) as string[];
       const result:Journal[]=[];for(const id of index){const j=JSON.parse(await this.store.hiddenRead(this.journalPath(id,c))) as Journal;if(j.source===path)result.push(j);}return result;
-    }catch{return [];}
+    }catch{throw new Error('Existing transaction history cannot be verified');}
   }
   private async log(j:Journal,c:Config):Promise<void>{
     await this.store.hiddenWrite(this.journalPath(j.id,c),JSON.stringify(j,null,2));
@@ -90,9 +95,14 @@ export class BatchService {
     if(await this.store.exists(target))throw new Error('Copy target exists; choose another suffix');return target;
   }
   async recovery(config:Config):Promise<Journal[]>{
-    try{const index=JSON.parse(await this.store.hiddenRead(String(config['storage.reportDirectory'])+'/index.json')) as string[];
-      const result:Journal[]=[];for(const id of index){const j=JSON.parse(await this.store.hiddenRead(this.journalPath(id,config))) as Journal;if(j.backup&&j.state!=='restored')result.push(j);}return result;
-    }catch{return [];}
+    const path=String(config['storage.reportDirectory'])+'/index.json';if(!await this.store.exists(path))return [];
+    const index=JSON.parse(await this.store.hiddenRead(path)) as string[];if(!Array.isArray(index)||index.length>100000)throw new Error('Invalid transaction index');
+    const result:Journal[]=[];for(const id of index){if(!/^[\w-]{1,64}$/.test(id))throw new Error('Invalid transaction ID');
+      const j=JSON.parse(await this.store.hiddenRead(this.journalPath(id,config))) as Journal;
+      if(j.version!==1||j.id!==id||!['copy','replace'].includes(j.output)||typeof j.source!=='string'||!/^\w{64}$/.test(j.originalHash)||!/^\w{64}$/.test(j.outputHash))throw new Error('Invalid transaction record');
+      if(j.backup&&!j.backup.startsWith(String(config['storage.backupDirectory'])+'/'+id+'/'))throw new Error('Backup outside owned transaction');
+      if(j.backup&&j.state!=='restored')result.push(j);
+    }return result;
   }
   async restore(j:Journal,config:Config):Promise<void>{
     if(this.busy)throw new Error('Batch active');if(!j.backup)throw new Error('No original backup');safePath(j.source);safePath(j.backup,true);
