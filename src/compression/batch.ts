@@ -93,7 +93,7 @@ export class BatchService {
     }
     if(!index.includes(j.id)){index.push(j.id);await this.store.hiddenWrite(indexPath,JSON.stringify(index));}
   }
-  async commit(items:Prepared[],config:Config):Promise<Journal[]> {
+  async commit(items:Prepared[],config:Config,onProgress?:(journal:Journal)=>void):Promise<Journal[]> {
     if(this.busy)throw new Error('Batch already active');this.busy=true;this.controller=new AbortController();const logs:Journal[]=[];
     const units=new Map<string,Prepared[]>();
     for(const item of items)if(item.encoded){const key=item.group??item.path;const unit=units.get(key)??[];unit.push(item);units.set(key,unit);}
@@ -148,6 +148,7 @@ export class BatchService {
             journal.error=String(error);await this.log(journal,config);
           }
         }
+        for(const {journal}of jobs)onProgress?.(journal);
       }return logs;
     }finally{this.busy=false;this.controller=undefined;}
   }

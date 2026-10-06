@@ -8,24 +8,26 @@ import {Photo,PlaybackCoordinator} from '../playback/photo';
 import {JsonModal} from './settings';
 export class ScanModal extends Modal {
   private abort=new AbortController();private selected=new Set<string>();private refs:Reference[]=[];
-  private range:string;private shared=new Map<string,string[]>();private next=false;
+  private range:string;private outputMode:'copy'|'replace';private shared=new Map<string,string[]>();private next=false;
   private revision=0;
-  constructor(app:App,private index:ReferenceIndex,private batch:BatchService,private settings:(path?:string,note?:unknown)=>Config,private initial?:TFile[]){super(app);this.range=initial?.length?'selected-files':String(settings()['compression.defaultScope']);}
+  constructor(app:App,private index:ReferenceIndex,private batch:BatchService,private settings:(path?:string,note?:unknown)=>Config,private initial?:TFile[]){super(app);this.range=initial?.length?'selected-files':String(settings()['compression.defaultScope']);this.outputMode=settings()['compression.output']==='replace'?'replace':'copy';}
   override onOpen():void {this.contentEl.addClass('live-media');this.render();}
   private render():void {
     this.contentEl.empty();this.titleEl.setText('1 · 选择范围 / Select media');
     this.contentEl.createEl('p',{text:'扫描只读取文件。直接引用默认选中；动态展示和未知语法候选需要确认。共享原件会列出引用文章。'});
     new Setting(this.contentEl).setName('范围 · Scope').addDropdown(d=>d.addOptions({'current-note':'当前文章','selected-files':'选定文件','vault':'全库图片'}).setValue(this.range).onChange(v=>{this.range=v;this.render();}));
+    new Setting(this.contentEl).setName('保存方式').setDesc('生成副本不会改变文章中的图片；替换原图保留路径和引用，先备份。下一步仅准备临时结果，最后确认才保存。')
+      .addDropdown(d=>d.addOptions({copy:'生成压缩副本，保留原图',replace:'备份后替换原图，文章使用压缩图'}).setValue(this.outputMode).onChange(v=>{this.outputMode=v==='replace'?'replace':'copy';}));
     if(this.range==='selected-files')new Setting(this.contentEl).setName('选定文件').addButton(b=>b.setButtonText('搜索并添加图片').onClick(()=>{
       new MediaPicker(this.app,this.index,file=>{this.initial??=[];if(!this.initial.some(f=>f.path===file.path))this.initial.push(file);void this.scan();}).open();
     }));
     const list=this.contentEl.createDiv({cls:'live-media-scan-list'});
-    new Setting(this.contentEl).addButton(b=>b.setButtonText('下一步：编码预览').setCta().onClick(()=>{
+    new Setting(this.contentEl).addButton(b=>b.setButtonText('下一步：准备临时结果').setCta().onClick(()=>{
       if(!this.selected.size){new Notice('Select at least one verified file');return;}
-      this.next=true;const c={...this.settings()};const paths=[...this.selected];
+      this.next=true;const c={...this.settings(),'compression.output':this.outputMode};const paths=[...this.selected];
       const note=this.range==='current-note'?this.app.workspace.getActiveFile():null;
       const overrides=note?this.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;
-      const perFile=new Map(paths.map(path=>[path,structuredClone(this.settings(path,overrides))]));
+      const perFile=new Map(paths.map(path=>[path,structuredClone({...this.settings(path,overrides),'compression.output':this.outputMode})]));
       this.close();new PrepareModal(this.app,this.batch,paths,c,perFile).open();
     }));
     void this.scan(list);
@@ -109,13 +111,13 @@ class PrepareModal extends Modal {
       if(this.disposed)return;finished.add(item.path);
       if(item.encoded)success++;else if(item.outcome==='protected')skipped++;else failed++;
       const completed=this.paths.filter(path=>finished.has(path)).length;meter.value=completed;
-      summary.setText(`已完成 ${completed} / ${this.paths.length} · 成功 ${success} · 跳过 ${skipped} · 失败 ${failed}`);
-      const row=this.progress.createEl('p',{cls:'live-media-progress-result',text:item.path+': '+(item.encoded?'压缩并校验成功':item.outcome==='protected'?'已保护跳过 · '+item.reason:'本张失败，继续下一张 · '+item.reason)});
+      summary.setText(`已完成 ${completed} / ${this.paths.length} · 临时结果 ${success}（未保存） · 跳过 ${skipped} · 失败 ${failed}`);
+      const row=this.progress.createEl('p',{cls:'live-media-progress-result',text:item.path+': '+(item.encoded?'临时结果已校验，尚未保存':item.outcome==='protected'?'已保护跳过 · '+item.reason:'本张失败，继续下一张 · '+item.reason)});
       row.dataset.outcome=item.encoded?'success':item.outcome==='protected'?'protected':'failed';
     },path=>this.perFile.get(path)??this.config,(path,stage)=>{
       if(this.disposed)return;current.setText(`当前 ${this.paths.indexOf(path)+1} / ${this.paths.length} · ${stage==='reading'?'读取':stage==='checking'?'检查':'压缩与校验'} · ${path}`);
     }).then(items=>{
-      if(this.disposed)return;this.prepared=items;current.setText('逐张处理完成，正在打开对比结果…');this.review();
+      if(this.disposed)return;this.prepared=items;current.setText('临时结果准备完成，尚未保存；正在打开对比确认…');this.review();
     }).catch(error=>{if(!this.disposed){current.setText('批次停止');this.progress.createEl('p',{text:String(error)});}});
   }
   private review():void {
@@ -134,7 +136,19 @@ class CompareModal extends Modal {
   override onOpen():void {
     this.contentEl.addClass('live-media');this.titleEl.setText('3 · 对比并确认 / Review');
     this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const grid=entry.target as HTMLElement;if(entry.isIntersecting)void this.mount(grid);else this.release(grid);}},{rootMargin:'160px'});
-    this.contentEl.createEl('p',{text:`输出：${this.config['compression.output']==='copy'?'同扩展名副本，文章引用保持原件':'替换原件，先保存并校验备份'}。照片可直接点击播放；取消不写入。`});
+    const pending=this.items.filter(item=>item.encoded).length;
+    this.contentEl.createEl('p',{cls:'live-media-pending',text:`${pending} 张临时结果已校验，但尚未保存。关闭面板会丢弃临时结果，原图不会变化。`});
+    const actions=this.contentEl.createDiv({cls:'live-media-review-actions'});
+    const outputExplanation=actions.createEl('p',{cls:'live-media-output-explanation'});let saveButton:HTMLButtonElement|undefined;
+    const explain=()=>{const replace=this.config['compression.output']==='replace';
+      outputExplanation.setText(replace?'确认后先备份，再将压缩结果写回原路径，名称与文章引用不变。':'确认后生成压缩副本；原图与文章引用不变。要让文章使用压缩图，请选择备份后替换原图。');
+      if(saveButton)saveButton.textContent=replace?'确认替换原图（先备份）':'确认保存压缩副本';};
+    new Setting(actions).setName('保存方式').addDropdown(d=>d.addOptions({copy:'生成压缩副本，保留原图',replace:'备份后替换原图，文章使用压缩图'}).setValue(String(this.config['compression.output'])).onChange(v=>{this.config['compression.output']=v==='replace'?'replace':'copy';explain();}));
+    new Setting(actions).setName('最终确认后才写入').addButton(b=>{saveButton=b.buttonEl;b.setCta().onClick(()=>{
+      if(!this.selected.size){new Notice('没有已校验并选中的结果');return;}
+      const items=this.items.filter(i=>this.selected.has(i.path)),commit=new CommitModal(this.app,this.batch,items,{...this.config});
+      try{commit.open();this.close();}catch(error){commit.close();new Notice('保存面板未能打开，临时结果仍保留。 '+String(error));}
+    });});explain();
     for(const item of this.items){
       const card=this.contentEl.createDiv({cls:'live-media-compare'});card.createEl('h3',{text:item.path});
       if(!item.encoded){card.createEl('p',{text:item.reason??'未编码'});continue;}
@@ -146,10 +160,6 @@ class CompareModal extends Modal {
       grid.createEl('p',{text:'滚动到此处加载原件与结果 / Load comparison when visible'});
       this.previews.set(grid,{item,generation:0,active:false,urls:[],photos:[]});this.observer.observe(grid);
     }
-    new Setting(this.contentEl).setName('最终确认 · Final confirmation').addButton(b=>b.setButtonText('保存已选结果').setCta().onClick(()=>{
-      if(!this.selected.size){new Notice('No validated results selected');return;}
-      const items=this.items.filter(i=>this.selected.has(i.path));this.close();new CommitModal(this.app,this.batch,items,this.config).open();
-    }));
   }
   private async mount(grid:HTMLElement):Promise<void>{
     const state=this.previews.get(grid);if(!state||state.active||this.closed)return;
@@ -174,14 +184,26 @@ class CompareModal extends Modal {
   override onClose():void {this.closed=true;this.observer?.disconnect();for(const grid of this.previews.keys())this.release(grid);this.previews.clear();this.coordinator.destroy();this.contentEl.empty();}
 }
 class CommitModal extends Modal {
+  private disposed=false;
   constructor(app:App,private batch:BatchService,private items:Prepared[],private config:Config){super(app);}
   override onOpen():void {
-    this.contentEl.addClass('live-media');this.titleEl.setText('4 · 保存与读回 / Commit');
-    const status=this.contentEl.createDiv();status.createEl('p',{text:'正在串行保存…'});
+    this.disposed=false;this.contentEl.addClass('live-media');this.titleEl.setText('4 · 保存与读回 / Commit');
+    const summary=this.contentEl.createEl('p',{cls:'live-media-save-summary',text:'正在保存并读回校验，尚未完成…'});
+    const mode=this.config['compression.output']==='replace'?'原图替换':'压缩副本';
+    this.contentEl.createEl('p',{text:mode==='原图替换'?'压缩文件将保留原路径、名称及文章引用；原件备份通过后才写入。':'本次生成压缩副本，文章仍引用原图。'});
+    const status=this.contentEl.createDiv({cls:'live-media-save-results'});
     new Setting(this.contentEl).addButton(b=>b.setButtonText('停止剩余队列').onClick(()=>this.batch.cancel()));
-    void this.batch.commit(this.items,this.config).then(logs=>{status.empty();for(const j of logs)status.createEl('p',{text:j.target+' · '+j.state+(j.error?' · '+j.error:'')});}).catch(e=>status.createEl('p',{text:String(e)}));
+    const show=(logs:Journal[],finished:boolean)=>{
+      if(this.disposed)return;
+      const saved=logs.filter(j=>j.state==='committed');let original=0,compressed=0;
+      for(const log of saved){const item=this.items.find(i=>i.path===log.source);if(item?.encoded){original+=item.inputBytes??item.input.length;compressed+=item.encoded.bytes.length;}}
+      summary.setText(`${finished?'保存结束':'正在保存'} · 已保存并读回校验 ${saved.length} / ${this.items.length} · 失败 ${logs.filter(j=>j.state!=='committed').length} · 未处理 ${this.items.length-logs.length}`+(saved.length?` · ${(original/1048576).toFixed(2)} → ${(compressed/1048576).toFixed(2)} MiB`:''));
+      status.empty();for(const j of logs)status.createEl('p',{text:j.target+' · '+(j.state==='committed'?(mode==='原图替换'?'原图已替换并读回校验通过':'压缩副本已保存并读回校验通过'):'未成功保存 · '+j.state)+(j.error?' · '+j.error:'')});
+    };
+    const logs:Journal[]=[];
+    void this.batch.commit(this.items,this.config,journal=>{logs.push(journal);show(logs,false);}).then(result=>show(result,true)).catch(error=>{if(!this.disposed){summary.setText('保存未完成，不能视为压缩已保存');status.createEl('p',{text:String(error)});}});
   }
-  override onClose():void {this.batch.cancel();this.contentEl.empty();}
+  override onClose():void {this.disposed=true;this.batch.cancel();this.contentEl.empty();}
 }
 export class RecoveryModal extends Modal {
   constructor(app:App,private batch:BatchService,private config:Config){super(app);}

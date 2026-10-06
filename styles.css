@@ -17,3 +17,7 @@
 .live-media .live-media-progress-current { overflow-wrap:anywhere; color:var(--text-muted); }
 .live-media .live-media-progress-results { max-height:40vh; overflow:auto; overflow-wrap:anywhere; }
 .live-media .live-media-progress-result[data-outcome="failed"] { color:var(--text-error); }
+
+.live-media .live-media-review-actions { position:sticky; top:0; z-index:2; background:var(--background-primary); border-bottom:1px solid var(--background-modifier-border); padding-bottom:8px; }
+.live-media .live-media-pending { font-weight:600; }
+.live-media .live-media-save-results { max-height:50vh; overflow:auto; overflow-wrap:anywhere; }
