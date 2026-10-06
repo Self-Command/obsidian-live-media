@@ -96,7 +96,8 @@ class CompareModal extends Modal {
       if(!item.encoded){card.createEl('p',{text:item.reason??'未编码'});continue;}
       this.selected.add(item.path);
       new Setting(card).setName(`${(item.input.length/1048576).toFixed(2)} → ${(item.encoded.bytes.length/1048576).toFixed(2)} MiB`)
-        .setDesc(item.encoded.warnings.join(' ')).addToggle(t=>t.setValue(true).onChange(v=>{if(v)this.selected.add(item.path);else this.selected.delete(item.path);}));
+        .setDesc(item.encoded.warnings.join(' ')).addToggle(t=>t.setValue(true).setDisabled(!!item.group).onChange(v=>{if(v)this.selected.add(item.path);else this.selected.delete(item.path);}));
+      if(item.encoded.before.format==='mov'){card.createEl('p',{text:'与照片作为同一媒体组处理；不显示视频播放器。'});continue;}
       const grid=card.createDiv({cls:'live-media-compare-grid'});
       for(const [label,bytes,p] of [['原件',item.input,item.encoded.before],['结果',item.encoded.bytes,item.encoded.after]]as const){
         const cell=grid.createDiv();cell.createEl('p',{text:label});const image=cell.createEl('img',{attr:{alt:label}});

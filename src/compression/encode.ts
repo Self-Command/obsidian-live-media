@@ -6,12 +6,14 @@ import {validateVideoPreservation,validateCoverTime} from '../media/mp4';
 import {ascii, concat, equal, jpegSegments} from '../media/bytes';
 import type {Config} from '../settings/model';
 import {exifOrientation,minimalExif,scrubGpsSegment,applePhotoId} from '../media/exif';
-import {mpfPictures,addMotionToHdr} from '../media/hdr';
+import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
+import {xmpTags,namespaces,cameraNamespace,itemNamespace} from '../media/xmp';
+import {trustedApplePair,validateAppleMovie} from '../media/apple';
 export interface Encoded {bytes: Uint8Array; before: MediaProbe; after: MediaProbe; backend: string; warnings: string[]}
 export class ProtectedMedia extends Error {}
 export class Compressor {
   constructor(public engine: OfflineEngine,private native?:()=>OfflineEngine|undefined){}
-  async encode(input:Uint8Array,extension:string,c:Config,signal:AbortSignal):Promise<Encoded>{
+  async encode(input:Uint8Array,extension:string,c:Config,signal:AbortSignal,intermediate=false):Promise<Encoded>{
     const before=probe(input);const warnings:string[]=[];
     if(input.length>Number(c['performance.maxInputMiB'])*1048576)throw new ProtectedMedia('Input exceeds configured memory budget');
     if(before.width&&before.height&&before.width*before.height>Number(c['performance.maxPixelsMp'])*1000000)throw new ProtectedMedia('Pixel budget exceeded');
@@ -30,6 +32,7 @@ export class Compressor {
       let bytes:Uint8Array;
       if(before.live){
         if(before.videoStart===undefined)throw new ProtectedMedia('No trusted video boundary');
+        if(c['compression.liveMode']==='video-only'&&(!c['compression.preserveExif']||!c['compression.preserveGps']))throw new ProtectedMedia('Video-only preserves the photo unchanged; metadata removal requires a photo route');
         const video=input.slice(before.videoStart);
         validateCoverTime(video,before.timestamp);
         await backend.validate(video);
@@ -48,17 +51,31 @@ export class Compressor {
         if(c['compression.liveMode']==='video-only')bytes=replaceMotionVideo(input,output);
         else {
           if(lossless)throw new ProtectedMedia('Photo reencode is not a lossless route');
-          if(!before.hdr)throw new ProtectedMedia('SDR dual writer is not verified');
-          if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
-          const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
-          if(await this.engine.run('hdr-probe',{input:photo})!==1)throw new ProtectedMedia('HDR full decode failed');
-          const rebuilt=await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
-          if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
-          bytes=addMotionToHdr(rebuilt,output,before.timestamp);
-          if(await this.engine.run('hdr-probe',{input:bytes.slice(0,probe(bytes).videoStart)})!==1)throw new Error('Final gain-map decode failed');
+          if(before.hdr){
+            if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
+            const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
+            if(await this.engine.run('hdr-probe',{input:photo})!==1)throw new ProtectedMedia('HDR full decode failed');
+            const rebuilt=await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
+            if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
+            bytes=addMotionToHdr(rebuilt,output,before.timestamp);
+            if(await this.engine.run('hdr-probe',{input:bytes.slice(0,probe(bytes).videoStart)})!==1)throw new Error('Final gain-map decode failed');
+          }else{
+            const s=before.xmp!;const xml=ascii(input,s.payload+29,s.end-s.payload-29),tags=xmpTags(xml),ns=namespaces(tags);
+            for(const tag of tags)for(const [key,value]of tag.attrs){
+              if(key.startsWith('xmlns:')||['rdf:parseType','x:xmptk'].includes(key))continue;
+              const [prefix,local]=key.split(':');const uri=ns.get(prefix!);
+              if(uri===cameraNamespace&&['MotionPhoto','MotionPhotoVersion','MotionPhotoPresentationTimestampUs','MicroVideo','MicroVideoVersion','MicroVideoOffset','MicroVideoPresentationTimestampUs'].includes(local!))continue;
+              if(uri===itemNamespace&&['Mime','Semantic','Length','Padding'].includes(local!))continue;
+              throw new ProtectedMedia('Motion packet contains ancillary metadata needing preservation: '+key);
+            }
+            if(jpegSegments(input).at(-1)!.end!==before.videoStart)throw new ProtectedMedia('Unclassified SDR resources between image and movie');
+            const photo=concat(input.subarray(0,s.start),input.subarray(s.end,before.videoStart));
+            const rebuilt=await this.encode(photo,extension,c,signal,true);
+            bytes=addMotionToSdr(rebuilt.bytes,output,before.timestamp);
+          }
         }
         // Static pixel codestream, EXIF, MPF, gain map and timestamps are preserved by writer.
-        warnings.push(c['compression.liveMode']==='video-only'?'Static image resources preserved byte for byte outside motion length XMP.':'HDR intents reencoded with new verified MPF index; original cover time retained.');
+        warnings.push(c['compression.liveMode']==='video-only'?'Static image resources preserved byte for byte outside motion length XMP.':before.hdr?'HDR intents reencoded with new verified MPF index; original cover time retained.':'JPEG reencoded with retained metadata; original cover time retained.');
       }else{
         if(before.hdr){
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])throw new ProtectedMedia('HDR reconstruction is lossy');
@@ -117,8 +134,30 @@ export class Compressor {
       const after=probe(bytes);
       if(after.format!==before.format||after.live!==before.live||after.hdr!==before.hdr)throw new Error('Output capability changed');
       if(!c['compression.resizeImage']&&(before.width!==after.width||before.height!==after.height))throw new Error('Image dimensions changed');
-      if((1-bytes.length/input.length)*100<Number(c['compression.minSavingPercent'])||bytes.length>=input.length)throw new ProtectedMedia('Result does not meet minimum savings');
+      if(!intermediate&&((1-bytes.length/input.length)*100<Number(c['compression.minSavingPercent'])||bytes.length>=input.length))throw new ProtectedMedia('Result does not meet minimum savings');
       return {bytes,before,after,backend:c['compression.backend']==='native'?'native':'wasm',warnings};
+    }finally{signal.removeEventListener('abort',cancel);}
+  }
+  async encodeApple(photo:Uint8Array,movie:Uint8Array,c:Config,signal:AbortSignal):Promise<{photo:Uint8Array;movie:Uint8Array}>{
+    if(!trustedApplePair(photo,movie))throw new ProtectedMedia('Apple pair identity or still-image-time track is missing');
+    if(c['compression.resizeVideo']||c['compression.resizeImage'])throw new ProtectedMedia('Apple resizing requires verified orientation and crop handling');
+    if(!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('Apple identity metadata cannot be stripped by this route');
+    if(c['compression.liveMode']!=='video-only')throw new ProtectedMedia('Apple photo reencode has not passed maker-note/phone protection tests');
+    if(movie.length>Number(c['performance.maxInputMiB'])*1048576)throw new ProtectedMedia('Apple movie exceeds input budget');
+    const backend=c['compression.backend']==='native'?this.native?.():this.engine;if(!backend||c['compression.backend']==='webcodecs')throw new ProtectedMedia('Selected backend unavailable');
+    const cancel=()=>backend.destroy();signal.addEventListener('abort',cancel,{once:true});
+    try{
+      if(signal.aborted)throw new Error('Cancelled');await backend.validate(movie);
+      const args=['-v','error','-noautorotate','-i','$INPUT','-map','0','-map_metadata','0','-c','copy'];
+      if(c['compression.allowLossy']&&c['compression.preset']!=='lossless'){
+        const crf=c['compression.videoQuality']==='high'?18:c['compression.videoQuality']==='balanced'?23:Number(c['compression.ffmpegCrf']);
+        args.push('-c:v','libx264','-crf',String(crf),'-fps_mode','passthrough','-enc_time_base:v','-1');
+      }
+      args.push('-movflags','use_metadata_tags','$OUTPUT');const output=await backend.encode(movie,'mov',args);
+      await backend.validate(output);await validateAppleMovie(movie,output);
+      if(!trustedApplePair(photo,output))throw new Error('Output Apple pair no longer trusted');
+      if(output.length>=movie.length||(1-output.length/movie.length)*100<Number(c['compression.minSavingPercent']))throw new ProtectedMedia('Apple movie does not meet savings threshold');
+      return {photo:photo.slice(),movie:output};
     }finally{signal.removeEventListener('abort',cancel);}
   }
 }

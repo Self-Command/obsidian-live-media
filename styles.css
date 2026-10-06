@@ -10,4 +10,5 @@
 .live-media-compare-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .live-media-compare-grid img { max-width: 100%; max-height: 350px; object-fit: contain; }
 .live-media-scan-list { max-height: 55vh; overflow-y: auto; }
+.live-media-remote-image { max-width: 100%; max-height: 60vh; object-fit: contain; }
 @media (max-width: 520px) { .live-media-compare-grid {grid-template-columns: 1fr;} }

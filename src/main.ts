@@ -13,6 +13,7 @@ import {ScanModal,RecoveryModal} from './ui/batch';
 import {probe} from './media/probe';
 import type {ReferenceProvider} from './references/source';
 import {Diagnostics} from './diagnostics';
+import {RemoteMediaModal} from './ui/remote';
 export default class LiveMedia extends Plugin {
   engine = new OfflineEngine();
   private model!:SettingsModel;private references!:ReferenceIndex;private hosts!:HostManager;private batch!:BatchService;
@@ -62,6 +63,13 @@ export default class LiveMedia extends Plugin {
     this.addCommand({id:'restore-originals',name:'检查日志并恢复原件 / Restore originals',callback:()=>new RecoveryModal(this.app,this.batch,this.model.effective()).open()});
     this.addCommand({id:'inspect-note-media',name:'检查当前文章媒体格式 / Inspect media',callback:()=>{void this.inspect();}});
     this.addCommand({id:'export-diagnostics',name:'查看脱敏诊断 / View diagnostics',callback:()=>new JsonModal(this.app,'Live Media · Diagnostics',this.diagnostics!.report()).open()});
+    this.addCommand({id:'inspect-remote-media',name:'手动检查远程照片 / Inspect remote photo',callback:()=>{
+      if(!this.model.effective()['network.remote']){this.notify('先开启手动远程读取；自动播放不会联网。');return;}
+      new JsonModal(this.app,'确认远程照片 URL / Confirm remote URL','https://',async text=>{
+        const url=new URL(text);if(!['https:','http:'].includes(url.protocol)||url.username||url.password)throw new Error('Use HTTP(S) without embedded credentials');
+        new RemoteMediaModal(this.app,url,this.model.effective()).open();
+      }).open();
+    }});
     this.addCommand({id:'stop-playback',name:'停止所有照片播放 / Stop playback',callback:()=>this.hosts.coordinator.stopAll()});
     this.addCommand({id:'authorize-native-engine',name:'授权本设备 FFmpeg / Authorize native FFmpeg',callback:()=>{
       if(!Platform.isDesktopApp){this.notify('Native backend is desktop only');return;}

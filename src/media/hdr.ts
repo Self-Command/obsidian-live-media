@@ -39,3 +39,12 @@ export function addMotionToHdr(hdr:Uint8Array,video:Uint8Array,timestamp:string|
   if(!p.live||!p.hdr||p.timestamp!==(timestamp??'-1'))throw new Error('Reconstructed motion/HDR metadata failed');
   return output;
 }
+export function addMotionToSdr(photo:Uint8Array,video:Uint8Array,timestamp:string|undefined):Uint8Array{
+  const p=probe(photo);if(p.format!=='jpeg'||p.hdr||p.live||p.capability!=='static')throw new Error('Not a verified standalone SDR JPEG');
+  if(timestamp!==undefined&&!/^-?\d{1,20}$/.test(timestamp))throw new Error('Invalid presentation timestamp');
+  const xml=`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:GCamera="http://ns.google.com/photos/1.0/camera/" xmlns:Container="http://ns.google.com/photos/1.0/container/" xmlns:Item="http://ns.google.com/photos/1.0/container/item/" GCamera:MotionPhoto="1" GCamera:MotionPhotoVersion="1" GCamera:MotionPhotoPresentationTimestampUs="${timestamp??'-1'}"><Container:Directory><rdf:Seq><rdf:li rdf:parseType="Resource"><Container:Item Item:Mime="image/jpeg" Item:Semantic="Primary" Item:Padding="0"/></rdf:li><rdf:li rdf:parseType="Resource"><Container:Item Item:Mime="video/mp4" Item:Semantic="MotionPhoto" Item:Length="${video.length}" Item:Padding="0"/></rdf:li></rdf:Seq></Container:Directory></rdf:Description></rdf:RDF></x:xmpmeta>`;
+  const payload=concat(new TextEncoder().encode('http://ns.adobe.com/xap/1.0/\0'),new TextEncoder().encode(xml));
+  const segment=new Uint8Array(payload.length+4);segment.set([255,225]);new DataView(segment.buffer).setUint16(2,payload.length+2);segment.set(payload,4);
+  const output=concat(photo.subarray(0,2),segment,photo.subarray(2),video),after=probe(output);
+  if(!after.live||after.hdr||after.timestamp!==(timestamp??'-1'))throw new Error('SDR motion readback failed');return output;
+}
