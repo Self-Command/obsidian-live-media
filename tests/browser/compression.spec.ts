@@ -33,7 +33,7 @@ test('real SDR and HDR motion files preserve decode, cover time, audio, frames a
     const hdrValid=await e.run('hdr-probe',{input:hdrOutput.bytes.slice(0,hdrAfter.videoStart)});
     await h.validateVideoPreservation(video,compressed.bytes.slice(p.videoStart));
     const sourceTracks=h.tracks(video),outputTracks=h.tracks(compressed.bytes.slice(p.videoStart));
-    e.destroy();return {fixture:Array.from(motion),sdrModes,live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
+    e.destroy();return {fixture:Array.from(motion as Uint8Array),sdrModes,live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
   });
   expect(result.live).toBe(true);expect(result.time).toBe('500000');expect(result.smaller).toBe(true);
   expect(result.sdrModes).toEqual([true,true]);

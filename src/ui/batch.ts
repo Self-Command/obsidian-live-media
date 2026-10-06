@@ -8,7 +8,7 @@ import {Photo,PlaybackCoordinator} from '../playback/photo';
 export class ScanModal extends Modal {
   private abort=new AbortController();private selected=new Set<string>();private refs:Reference[]=[];
   private range:string;private shared=new Map<string,string[]>();private next=false;
-  constructor(app:App,private index:ReferenceIndex,private batch:BatchService,private settings:()=>Config,private initial?:TFile[]){super(app);this.range=initial?.length?'selected-files':String(settings()['compression.defaultScope']);}
+  constructor(app:App,private index:ReferenceIndex,private batch:BatchService,private settings:(path?:string,note?:unknown)=>Config,private initial?:TFile[]){super(app);this.range=initial?.length?'selected-files':String(settings()['compression.defaultScope']);}
   override onOpen():void {this.contentEl.addClass('live-media');this.render();}
   private render():void {
     this.contentEl.empty();this.titleEl.setText('1 · 选择范围 / Select media');
@@ -18,7 +18,10 @@ export class ScanModal extends Modal {
     new Setting(this.contentEl).addButton(b=>b.setButtonText('下一步：编码预览').setCta().onClick(()=>{
       if(!this.selected.size){new Notice('Select at least one verified file');return;}
       this.next=true;const c={...this.settings()};const paths=[...this.selected];
-      this.close();new PrepareModal(this.app,this.batch,paths,c).open();
+      const note=this.range==='current-note'?this.app.workspace.getActiveFile():null;
+      const overrides=note?this.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;
+      const perFile=new Map(paths.map(path=>[path,structuredClone(this.settings(path,overrides))]));
+      this.close();new PrepareModal(this.app,this.batch,paths,c,perFile).open();
     }));
     void this.scan(list);
   }
@@ -72,13 +75,13 @@ export class ScanModal extends Modal {
 }
 class PrepareModal extends Modal {
   private allowClose=false;
-  constructor(app:App,private batch:BatchService,private paths:string[],private config:Config){super(app);}
+  constructor(app:App,private batch:BatchService,private paths:string[],private config:Config,private perFile:Map<string,Config>){super(app);}
   override onOpen():void {
     this.contentEl.addClass('live-media');this.titleEl.setText('2 · 临时编码 / Prepare comparison');
     this.contentEl.createEl('p',{text:'原件不会修改。编码结束后展示对比，只有最终确认才写入。'});
     const progress=this.contentEl.createDiv();
     new Setting(this.contentEl).addButton(b=>b.setButtonText('取消').onClick(()=>this.close()));
-    void this.batch.prepare(this.paths,this.config,item=>progress.createEl('p',{text:item.path+': '+(item.encoded?'已校验临时结果':item.reason)})).then(items=>{
+    void this.batch.prepare(this.paths,this.config,item=>progress.createEl('p',{text:item.path+': '+(item.encoded?'已校验临时结果':item.reason)}),path=>this.perFile.get(path)??this.config).then(items=>{
       if(!this.isOpen())return;this.allowClose=true;this.close();new CompareModal(this.app,this.batch,items,this.config).open();
     }).catch(e=>{progress.createEl('p',{text:String(e)});});
   }

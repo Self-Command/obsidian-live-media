@@ -28,7 +28,7 @@ export class NativeEngine extends OfflineEngine {
     });
   }
   override async validate(input:Uint8Array):Promise<void>{
-    await this.encode(input,'mp4',['-v','error','-i','$INPUT','-map','0:v:0','-f','framehash','$OUTPUT'],'txt');
+    await this.encode(input,'mp4',['-v','error','-i','$INPUT','-map','0:v:0','-map','0:a?','-f','framehash','$OUTPUT'],'txt');
   }
   override destroy():void{this.kill?.();this.kill=undefined;}
 }

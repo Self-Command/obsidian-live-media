@@ -83,7 +83,7 @@ export function validateCombined(config: Config): void {
     config['gesture.modifier'] === config['host.passthroughModifier']) throw new Error('Playback and passthrough modifiers conflict');
   if (config['storage.backupDirectory'] === config['storage.reportDirectory'] || config['storage.copyDirectory'] === config['storage.backupDirectory']) throw new Error('Output and tool directories must differ');
 }
-const overrideForbidden = /^(?:native\.|storage\.|settings\.|detect\.|scope\.|diagnostics\.|network\.|pairing\.)/;
+const overrideForbidden = /^(?:native\.|storage\.|settings\.|detect\.|scope\.|diagnostics\.|network\.|pairing\.|compression\.(?:output|defaultScope|includeShared|repeated)$)/;
 export class SettingsModel {
   data: Preferences;
   constructor(raw: unknown, public platform: Platform) {

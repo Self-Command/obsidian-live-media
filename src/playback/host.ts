@@ -30,9 +30,19 @@ export class HostSession extends MarkdownRenderChild {
   private photos=new Map<HTMLImageElement,{photo:Photo;path:string}>();private waiting=new Set<HTMLImageElement>();private generation=0;private closed=false;
   private inflight=0;private queue:Array<()=>Promise<void>>=[];
   private negatives=new WeakMap<HTMLImageElement,string>();
+  private retireTimers=new Map<HTMLImageElement,ReturnType<typeof setTimeout>>();
   constructor(private manager:HostManager,private root:HTMLElement,private source:string,private kind:'reading'|'preview'){super(root);}
   start():void {
     this.load();this.scan();
+    this.visibility=new IntersectionObserver(entries=>{for(const entry of entries){
+      const img=entry.target as HTMLImageElement;const timer=this.retireTimers.get(img);
+      if(entry.isIntersecting){if(timer)clearTimeout(timer);this.retireTimers.delete(img);continue;}
+      if(timer||!this.photos.has(img))continue;
+      this.retireTimers.set(img,setTimeout(()=>{
+        this.retireTimers.delete(img);const record=this.photos.get(img);if(!record||this.closed)return;
+        record.photo.destroy();this.photos.delete(img);this.visibility?.unobserve(img);this.scan();
+      },Number(this.manager.model.effective()['performance.warmSeconds'])*1000));
+    }});
     this.observer=new MutationObserver(()=>{queueMicrotask(()=>{if(!this.closed)this.scan();});});
     this.observer.observe(this.root,{subtree:true,childList:true,attributes:true,attributeFilter:['src','srcset']});
   }
@@ -46,7 +56,7 @@ export class HostSession extends MarkdownRenderChild {
     const noteOverrides=note instanceof TFile?this.manager.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;
     for(const img of this.root.querySelectorAll<HTMLImageElement>('img')){
       if(img.closest('.live-media-photo-layer')||this.photos.has(img)||this.waiting.has(img))continue;
-      const gallery=!!img.closest('.simple-gallery-container, .simple-gallery-grid, .simple-gallery');
+      const gallery=img.matches('.simple-gallery-img')||!!img.closest('.simple-gallery-container, .simple-gallery-grid, .simple-gallery');
       const overrides=c['compatibility.hostOverrides']as Record<string,unknown>;
       if(gallery&&(!c['render.gallery']||overrides['simple-gallery']==='disabled'))continue;
       const ref=this.manager.index.rendered(img,this.source);if(!ref.path)continue;
@@ -61,7 +71,7 @@ export class HostSession extends MarkdownRenderChild {
           if(file.stat.size>Number(settings['performance.maxInputMiB'])*1048576)return;
           const key=file.path+'\0'+file.stat.mtime+'\0'+file.stat.size;
           let bytes=this.manager.cache.get(key);
-          if(!bytes){bytes=new Uint8Array(await this.manager.app.vault.readBinary(file));this.manager.cache.put(key,bytes);}
+          if(!bytes){bytes=new Uint8Array(await this.manager.app.vault.readBinary(file));if(this.closed||generation!==this.generation)return;this.manager.cache.put(key,bytes);}
           const p=probe(bytes);let video:Uint8Array|undefined;
           if(p.live&&p.videoStart!==undefined)video=bytes.slice(p.videoStart);
           else {
@@ -88,7 +98,7 @@ export class HostSession extends MarkdownRenderChild {
             return effective;
           },this.manager.coordinator,()=>this.manager.wasPreviewed(file.path),()=>this.manager.remember(file.path),this.manager.notice,
           ()=>{URL.revokeObjectURL(finalURL);finalRelease();},this.kind);
-          this.photos.set(img,{photo,path:file.path});url=undefined;release=undefined;
+          this.photos.set(img,{photo,path:file.path});this.visibility?.observe(img);url=undefined;release=undefined;
         }catch{/* corrupt/unsupported image remains ordinary host image */}
         finally{if(url)URL.revokeObjectURL(url);release?.();this.waiting.delete(img);}
       });
@@ -113,5 +123,6 @@ export class HostSession extends MarkdownRenderChild {
   invalidate(path:string):void {this.generation++;this.negatives=new WeakMap();for(const [img,value]of this.photos)if(value.path===path){value.photo.destroy();this.photos.delete(img);}this.waiting.clear();this.scan();}
   destroy():void {this.unload();}
   override onunload():void {if(this.closed)return;this.closed=true;this.generation++;this.observer?.disconnect();this.visibility?.disconnect();this.queue=[];
+    for(const t of this.retireTimers.values())clearTimeout(t);this.retireTimers.clear();
     for(const value of this.photos.values())value.photo.destroy();this.photos.clear();this.waiting.clear();this.manager.forget(this);}
 }

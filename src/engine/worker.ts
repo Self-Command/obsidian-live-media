@@ -70,7 +70,7 @@ scope.onmessage = async (event) => {
         const file='verify.'+ext;tail='';core.FS.writeFile(file,input);
         try {
           core.setTimeout(120000);
-          core.exec('-v', 'error', '-i', file, '-map', '0:v:0', '-c:v', 'rawvideo', '-f', 'null', '-');
+          core.exec('-v', 'error', '-i', file, '-map', '0:v:0', '-map', '0:a?', '-c:v', 'rawvideo', '-c:a', 'pcm_s16le', '-f', 'null', '-');
           if (core.ret !== 0) throw new Error('Full video/image decode failed: '+tail);
           result = true;
         } finally {core.reset(); core.FS.unlink(file);}

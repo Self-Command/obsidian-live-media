@@ -24,15 +24,16 @@ export class BatchService {
   busy=false;private controller?:AbortController;
   constructor(private store:Store,private compressor:Compressor){}
   cancel():void{this.controller?.abort();this.compressor.engine.destroy();}
-  async prepare(paths:string[],config:Config,onProgress?:(item:Prepared)=>void):Promise<Prepared[]> {
+  async prepare(paths:string[],baseConfig:Config,onProgress?:(item:Prepared)=>void,configFor?:(path:string)=>Config):Promise<Prepared[]> {
     if(this.busy)throw new Error('Batch already active');this.busy=true;this.controller=new AbortController();
-    const result:Prepared[]=[];const settingsHash=await hash(new TextEncoder().encode(JSON.stringify(config)));
+    const result:Prepared[]=[];
     const processed=new Set<string>();
-    let previewBytes=0;const previewBudget=Math.max(Number(config['performance.cacheMiB'])*1048576,Number(config['performance.maxInputMiB'])*1048576*2);
+    let previewBytes=0;const previewBudget=Math.max(Number(baseConfig['performance.cacheMiB'])*1048576,Number(baseConfig['performance.maxInputMiB'])*1048576*2);
     try{
       for(const path of [...new Set(paths)]){
         if(processed.has(path))continue;processed.add(path);
         if(this.controller.signal.aborted)break;safePath(path);
+        const config=configFor?.(path)??baseConfig;const settingsHash=await hash(new TextEncoder().encode(JSON.stringify(config)));
         const item:Prepared={path,input:new Uint8Array(),fingerprint:'',settingsHash};
         try{
           item.input=await this.store.read(path);item.fingerprint=await hash(item.input);

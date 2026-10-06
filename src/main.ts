@@ -57,9 +57,9 @@ export default class LiveMedia extends Plugin {
       for(const p of (this.model.data.global['pairing.explicit']??[])as Array<{photo:string;video:string}>){if(p.photo===old)p.photo=f.path;if(p.video===old)p.video=f.path;}
       void this.save();
     }));
-    this.registerEvent(this.app.workspace.on('file-menu',(menu,file)=>{if(file instanceof TFile&&this.references.eligible(file))menu.addItem(item=>item.setTitle('Live Media · 检查并压缩').setIcon('image').onClick(()=>new ScanModal(this.app,this.references,this.batch,()=>this.model.effective(),[file]).open()));}));
-    this.addCommand({id:'compress-current-note',name:'检查并压缩当前文章图片 / Compress note media',callback:()=>new ScanModal(this.app,this.references,this.batch,()=>({...this.model.effective(),'compression.defaultScope':'current-note'})).open()});
-    this.addCommand({id:'compress-vault',name:'检查并压缩全库图片 / Scan vault media',callback:()=>new ScanModal(this.app,this.references,this.batch,()=>({...this.model.effective(),'compression.defaultScope':'vault'})).open()});
+    this.registerEvent(this.app.workspace.on('file-menu',(menu,file)=>{if(file instanceof TFile&&this.references.eligible(file))menu.addItem(item=>item.setTitle('Live Media · 检查并压缩').setIcon('image').onClick(()=>new ScanModal(this.app,this.references,this.batch,(path,note)=>this.model.effective(path,note),[file]).open()));}));
+    this.addCommand({id:'compress-current-note',name:'检查并压缩当前文章图片 / Compress note media',callback:()=>new ScanModal(this.app,this.references,this.batch,(path,note)=>({...this.model.effective(path,note),'compression.defaultScope':'current-note'})).open()});
+    this.addCommand({id:'compress-vault',name:'检查并压缩全库图片 / Scan vault media',callback:()=>new ScanModal(this.app,this.references,this.batch,(path,note)=>({...this.model.effective(path,note),'compression.defaultScope':'vault'})).open()});
     this.addCommand({id:'restore-originals',name:'检查日志并恢复原件 / Restore originals',callback:()=>new RecoveryModal(this.app,this.batch,this.model.effective()).open()});
     this.addCommand({id:'inspect-note-media',name:'检查当前文章媒体格式 / Inspect media',callback:()=>{void this.inspect();}});
     this.addCommand({id:'export-diagnostics',name:'查看脱敏诊断 / View diagnostics',callback:()=>new JsonModal(this.app,'Live Media · Diagnostics',this.diagnostics!.report()).open()});
