@@ -44,9 +44,9 @@ export function restoreMotionEndTime(original:Uint8Array,encoded:Uint8Array):Uin
     const parts=children(encoded,stbl).filter(v=>!['stco','co64','stsc'].includes(v.type)).map(v=>v.type==='stts'&&timeline?timeline:encoded.slice(v.start,v.end));
     parts.push(table('stsc',[1,1,next[i]!.samples.length,1]),table('stco',[1,offset]));
     const newMinf=rebuild(encoded,minf,new Map([['stbl',box('stbl',concat(...parts))]]));
-    const mdiaParts=new Map([['minf',newMinf]]);
+    const mdiaParts=new Map<string,Uint8Array>([['minf',newMinf]]);
     if(i===index)mdiaParts.set('mdhd',withDuration(encoded,child(encoded,mdia,'mdhd'),'mdhd',target));
-    const trackParts=new Map([['mdia',rebuild(encoded,mdia,mdiaParts)]]);
+    const trackParts=new Map<string,Uint8Array>([['mdia',rebuild(encoded,mdia,mdiaParts)]]);
     if(i===index){const header=child(encoded,trak,'tkhd'),oldHeader=child(original,oldTraks[i]!,'tkhd');trackParts.set('tkhd',withDuration(encoded,header,'tkhd',converted(duration(original,oldHeader,'tkhd'),oldScale,scale)));}
     out.push(rebuild(encoded,trak,trackParts));const samples=concat(...next[i]!.samples);payloads.push(samples);offset+=samples.length;if(offset>0xffffffff)throw new Error('Movie offset budget');
   }
