@@ -1,0 +1,9 @@
+{
+  "artifactCommit": null,
+  "mainSha256": null,
+  "obsidian": {"status": "pending", "version": null},
+  "android": {"status": "pending", "version": null},
+  "ios": {"status": "pending", "version": null},
+  "galleryRecognition": {"status": "pending"},
+  "replacementRecovery": {"status": "pending"}
+}

@@ -1,0 +1,56 @@
+name: Promote tested artifact after device acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful candidate run ID
+        required: true
+      commit:
+        description: Full artifact commit SHA
+        required: true
+      version:
+        description: Version matching manifest, without v
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Download exact tested candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.run_id }}
+          SOURCE_COMMIT: ${{ inputs.commit }}
+        run: |
+          gh run view "$SOURCE_RUN" --json conclusion,headSha --jq . > run.json
+          gh run download "$SOURCE_RUN" --name "candidate-$SOURCE_COMMIT" --dir candidate
+          gh run download "$SOURCE_RUN" --name "corresponding-source-$SOURCE_COMMIT" --dir corresponding-source
+      - name: Enforce runtime acceptance and artifact identity
+        env:
+          SOURCE_COMMIT: ${{ inputs.commit }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json,hashlib,os,pathlib
+          p=pathlib.Path('candidate');proof=json.loads((p/'provenance.json').read_text())
+          run=json.loads(pathlib.Path('run.json').read_text());accept=json.loads(pathlib.Path('docs/device-acceptance.json').read_text())
+          assert run['conclusion']=='success' and run['headSha']==os.environ['SOURCE_COMMIT']==proof['commit']
+          assert accept['artifactCommit']==proof['commit']
+          for f in ['main.js','manifest.json','styles.css']:
+              digest=hashlib.sha256((p/f).read_bytes()).hexdigest()
+              assert digest==proof['files'][f]['sha256']
+              if f=='main.js':assert accept['mainSha256']==digest
+          assert all(accept[k]['status']=='passed' for k in ['obsidian','android','ios','galleryRecognition','replacementRecovery'])
+          assert json.loads((p/'manifest.json').read_text())['version']==os.environ['VERSION']
+          PY
+      - name: Publish same bytes without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          SOURCE_COMMIT: ${{ inputs.commit }}
+        run: |
+          tar -czf live-media-licenses.tar.gz -C candidate licenses LICENSE CODEC-BUILDING.md
+          gh release create "v$VERSION" candidate/main.js candidate/manifest.json candidate/styles.css candidate/provenance.json live-media-licenses.tar.gz corresponding-source/codec-corresponding-source.tar.gz --target "$SOURCE_COMMIT" --title "Live Media $VERSION" --notes "Promoted from the tested Actions artifact after recorded device acceptance. No rebuild."

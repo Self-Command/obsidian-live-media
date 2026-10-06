@@ -16,6 +16,7 @@ export class Compressor {
     if(input.length>Number(c['performance.maxInputMiB'])*1048576)throw new ProtectedMedia('Input exceeds configured memory budget');
     if(before.width&&before.height&&before.width*before.height>Number(c['performance.maxPixelsMp'])*1000000)throw new ProtectedMedia('Pixel budget exceeded');
     const hdrPhoto=before.hdr&&before.format==='jpeg';
+    if(hdrPhoto&&before.protected.some(reason=>!['Unclassified appended resources','HDR requires verified reconstruction'].includes(reason)))throw new ProtectedMedia(before.protected.join('; '));
     if(!hdrPhoto&&(before.protected.length||before.capability==='protected'))throw new ProtectedMedia(before.protected.join('; ')||'No verified writer');
     const format=before.live?'motion-jpeg':before.format;
     if((c['compression.formats'] as Record<string,boolean>)[format]===false)throw new ProtectedMedia('Format disabled');
@@ -49,7 +50,7 @@ export class Compressor {
           if(lossless)throw new ProtectedMedia('Photo reencode is not a lossless route');
           if(!before.hdr)throw new ProtectedMedia('SDR dual writer is not verified');
           if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
-          const photo=input.slice(0,before.videoStart);mpfPictures(photo);
+          const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
           if(await this.engine.run('hdr-probe',{input:photo})!==1)throw new ProtectedMedia('HDR full decode failed');
           const rebuilt=await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
           if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
@@ -62,7 +63,8 @@ export class Compressor {
         if(before.hdr){
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])throw new ProtectedMedia('HDR reconstruction is lossy');
           if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
-          mpfPictures(input);if(await this.engine.run('hdr-probe',{input})!==1)throw new ProtectedMedia('HDR full decode failed');
+          if(mpfPictures(input).pictures.at(-1)!.end!==input.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
+          if(await this.engine.run('hdr-probe',{input})!==1)throw new ProtectedMedia('HDR full decode failed');
           bytes=await this.engine.run('hdr-reencode',{input,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
           mpfPictures(bytes);if(await this.engine.run('hdr-probe',{input:bytes})!==1)throw new Error('Reconstructed HDR full decode failed');
         }else if(before.format==='jpeg'){
