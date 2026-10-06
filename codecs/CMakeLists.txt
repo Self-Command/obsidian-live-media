@@ -13,5 +13,6 @@ set_target_properties(live_hdr PROPERTIES SUFFIX ".js")
 target_link_options(live_hdr PRIVATE
   "-sMODULARIZE=1" "-sEXPORT_NAME=createUltraHDR" "-sENVIRONMENT=worker"
   "-sALLOW_MEMORY_GROWTH=1" "-sMAXIMUM_MEMORY=1073741824" "-sFILESYSTEM=0"
+  "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']"
   "-sEXPORTED_FUNCTIONS=['_malloc','_free','_lm_probe','_lm_reencode','_lm_output_size','_lm_fixture']"
   "--no-entry")

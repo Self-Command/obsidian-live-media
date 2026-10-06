@@ -89,5 +89,5 @@ scope.onmessage = async (event) => {
       } else throw new Error('Unknown engine operation');
     }
     scope.postMessage({id, result}, result instanceof Uint8Array ? [result.buffer as ArrayBuffer] : []);
-  } catch (error) {scope.postMessage({id, error: String(error)});}
+  } catch (error) {scope.postMessage({id, error: op + ': ' + String(error) + (error instanceof Error ? '\n' + error.stack : '')});}
 };
