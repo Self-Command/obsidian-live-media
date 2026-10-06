@@ -43,7 +43,7 @@ bash "$sources/ffmpeg-wasm/build/ffmpeg.sh" \
   --enable-parser=h264,hevc,mjpeg,png,aac \
   --enable-bsf=extract_extradata,h264_mp4toannexb,hevc_mp4toannexb \
   --enable-indev=lavfi \
-  --enable-filter=color,testsrc2,sine,format,scale,null,anull,aresample,buffer,buffersink,abuffer,abuffersink
+  --enable-filter=color,testsrc2,sine,format,scale,null,anull,aformat,aresample,buffer,buffersink,abuffer,abuffersink
 mkdir -p src
 cp -r "$sources/ffmpeg-wasm/src/bind" "$sources/ffmpeg-wasm/src/fftools" src/
 bash "$sources/ffmpeg-wasm/build/ffmpeg-wasm.sh" \

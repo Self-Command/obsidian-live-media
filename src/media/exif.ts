@@ -33,7 +33,11 @@ export function scrubGpsSegment(segment:Uint8Array):Uint8Array{
   const exif=main.find(e=>e.tag===0x8769),other=[...main,...(exif?t.entries(exif.offset):[])].filter(e=>e!==gps);
   if(other.some(e=>ranges.some(([start,end])=>e.start<end!&&e.end>start!)))throw new Error('Shared EXIF extent protected');
   for(const [start,end]of ranges)b.fill(0,start,end);
-  t.view.setUint32(gps.start,0,t.le);return b;
+  // Remove the pointer entry itself. A zero GPS-IFD pointer is malformed TIFF, not metadata removal.
+  const ifd=base+t.first,entry=gps.start-8,next=t.u32(ifd+2+main.length*12);
+  b.copyWithin(entry,entry+12,ifd+2+main.length*12);
+  t.view.setUint16(ifd,main.length-1,t.le);t.view.setUint32(ifd+2+(main.length-1)*12,next,t.le);
+  b.fill(0,ifd+2+(main.length-1)*12+4,ifd+2+main.length*12+4);return b;
 }
 export function applePhotoId(input:Uint8Array):string|undefined{
   // Trusted Apple pairing requires MakerApple key 17; do not infer it from filenames.

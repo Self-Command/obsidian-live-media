@@ -5,7 +5,7 @@ import {jpegSegments,boxes,concat} from '../../src/media/bytes';
 import {probe} from '../../src/media/probe';
 import {replaceMotionVideo} from '../../src/media/motion';
 import {ByteCache} from '../../src/playback/cache';
-import {exifOrientation,minimalExif} from '../../src/media/exif';
+import {exifOrientation,minimalExif,scrubGpsSegment} from '../../src/media/exif';
 const utf=(s:string)=>new TextEncoder().encode(s);
 function box(type:string,payload:Uint8Array):Uint8Array{const b=new Uint8Array(8+payload.length);new DataView(b.buffer).setUint32(0,b.length);b.set(utf(type),4);b.set(payload,8);return b;}
 const video=concat(box('ftyp',utf('isom0000')),box('moov',new Uint8Array()),box('mdat',utf('placeholder-container-not-a-decode-fixture')));
@@ -67,4 +67,13 @@ describe('byte cache ownership and budgets',()=>{
 });
 it('retains all eight EXIF orientations without optional private metadata',()=>{
   for(let n=1;n<=8;n++){const data=concat(Uint8Array.of(255,216),minimalExif(n),Uint8Array.of(255,217));expect(exifOrientation(data)).toBe(n);}
+});
+it('removes the GPS pointer and IFD while preserving orientation and valid TIFF layout',()=>{
+  const payload=new Uint8Array(62),v=new DataView(payload.buffer);payload.set(utf('Exif\0\0'));payload.set([73,73],6);v.setUint16(8,42,true);v.setUint32(10,8,true);v.setUint16(14,2,true);
+  v.setUint16(16,0x8825,true);v.setUint16(18,4,true);v.setUint32(20,1,true);v.setUint32(24,38,true);
+  v.setUint16(28,0x112,true);v.setUint16(30,3,true);v.setUint32(32,1,true);v.setUint16(36,6,true);
+  v.setUint16(44,1,true);v.setUint16(46,0,true);v.setUint16(48,1,true);v.setUint32(50,1,true);payload[54]=2;
+  const segment=new Uint8Array(66);segment.set([255,225]);new DataView(segment.buffer).setUint16(2,64);segment.set(payload,4);
+  const removed=scrubGpsSegment(segment);expect(new DataView(removed.buffer).getUint16(18,true)).toBe(1);
+  expect(exifOrientation(concat(Uint8Array.of(255,216),removed,Uint8Array.of(255,217)))).toBe(6);
 });

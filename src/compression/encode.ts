@@ -10,6 +10,7 @@ import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
 import {xmpTags,namespaces,cameraNamespace,itemNamespace} from '../media/xmp';
 import {trustedApplePair,validateAppleMovie} from '../media/apple';
 import {graftAppleVideo} from '../media/graft';
+import {requireHdrMetadataWriter,verifyHdrMetadata} from '../media/hdr-metadata';
 export interface Encoded {bytes: Uint8Array; before: MediaProbe; after: MediaProbe; backend: string; warnings: string[]}
 export class ProtectedMedia extends Error {}
 export class Compressor {
@@ -54,9 +55,10 @@ export class Compressor {
           if(lossless)throw new ProtectedMedia('Photo reencode is not a lossless route');
           if(before.hdr){
             if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
-            const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
+            const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');requireHdrMetadataWriter(photo);
             if(await this.engine.run('hdr-probe',{input:photo})!==1)throw new ProtectedMedia('HDR full decode failed');
             const rebuilt=await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
+            verifyHdrMetadata(photo,rebuilt);
             if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
             bytes=addMotionToHdr(rebuilt,output,before.timestamp);
             if(await this.engine.run('hdr-probe',{input:bytes.slice(0,probe(bytes).videoStart)})!==1)throw new Error('Final gain-map decode failed');
@@ -81,9 +83,10 @@ export class Compressor {
         if(before.hdr){
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])throw new ProtectedMedia('HDR reconstruction is lossy');
           if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
-          if(mpfPictures(input).pictures.at(-1)!.end!==input.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');
+          if(mpfPictures(input).pictures.at(-1)!.end!==input.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');requireHdrMetadataWriter(input);
           if(await this.engine.run('hdr-probe',{input})!==1)throw new ProtectedMedia('HDR full decode failed');
           bytes=await this.engine.run('hdr-reencode',{input,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
+          verifyHdrMetadata(input,bytes);
           mpfPictures(bytes);if(await this.engine.run('hdr-probe',{input:bytes})!==1)throw new Error('Reconstructed HDR full decode failed');
         }else if(before.format==='jpeg'){
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])

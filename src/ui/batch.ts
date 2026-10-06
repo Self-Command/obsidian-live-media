@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {Modal,Setting,Notice,TFile,type App} from 'obsidian';
+import {Modal,Setting,Notice,TFile,FuzzySuggestModal,type App} from 'obsidian';
 import type {ReferenceIndex} from '../references/vault';
 import type {Reference} from '../references/source';
 import type {BatchService,Prepared,Journal} from '../compression/batch';
@@ -8,12 +8,16 @@ import {Photo,PlaybackCoordinator} from '../playback/photo';
 export class ScanModal extends Modal {
   private abort=new AbortController();private selected=new Set<string>();private refs:Reference[]=[];
   private range:string;private shared=new Map<string,string[]>();private next=false;
+  private revision=0;
   constructor(app:App,private index:ReferenceIndex,private batch:BatchService,private settings:(path?:string,note?:unknown)=>Config,private initial?:TFile[]){super(app);this.range=initial?.length?'selected-files':String(settings()['compression.defaultScope']);}
   override onOpen():void {this.contentEl.addClass('live-media');this.render();}
   private render():void {
     this.contentEl.empty();this.titleEl.setText('1 · 选择范围 / Select media');
     this.contentEl.createEl('p',{text:'扫描只读取文件。直接引用默认选中；动态展示和未知语法候选需要确认。共享原件会列出引用文章。'});
-    new Setting(this.contentEl).setName('范围 · Scope').addDropdown(d=>d.addOptions({'current-note':'当前文章','selected-files':'选定文件','vault':'全库图片'}).setValue(this.range).onChange(v=>{this.range=v;void this.scan();}));
+    new Setting(this.contentEl).setName('范围 · Scope').addDropdown(d=>d.addOptions({'current-note':'当前文章','selected-files':'选定文件','vault':'全库图片'}).setValue(this.range).onChange(v=>{this.range=v;this.render();}));
+    if(this.range==='selected-files')new Setting(this.contentEl).setName('选定文件').addButton(b=>b.setButtonText('搜索并添加图片').onClick(()=>{
+      new MediaPicker(this.app,this.index,file=>{this.initial??=[];if(!this.initial.some(f=>f.path===file.path))this.initial.push(file);void this.scan();}).open();
+    }));
     const list=this.contentEl.createDiv({cls:'live-media-scan-list'});
     new Setting(this.contentEl).addButton(b=>b.setButtonText('下一步：编码预览').setCta().onClick(()=>{
       if(!this.selected.size){new Notice('Select at least one verified file');return;}
@@ -26,6 +30,7 @@ export class ScanModal extends Modal {
     void this.scan(list);
   }
   private async scan(list=this.contentEl.querySelector<HTMLElement>('.live-media-scan-list')!):Promise<void>{
+    const revision=++this.revision;const current=()=>!this.abort.signal.aborted&&revision===this.revision&&list.isConnected;
     list.empty();list.createEl('p',{text:'正在读取引用…'});this.selected.clear();this.refs=[];this.shared.clear();
     const c=this.settings();
     try{
@@ -57,21 +62,28 @@ export class ScanModal extends Modal {
       if(c['scope.order']==='size-desc')refs.sort((a,b)=>(this.app.vault.getAbstractFileByPath(b.path!)as TFile).stat.size-(this.app.vault.getAbstractFileByPath(a.path!)as TFile).stat.size);
       // Shared use includes source parsing, so gallery references are counted as well.
       for(const note of this.app.vault.getMarkdownFiles()){
-        if(this.abort.signal.aborted)return;
+        if(!current())return;
         for(const ref of await this.index.note(note,this.abort.signal))if(ref.path&&unique.has(ref.path)&&ref.evidence==='direct'){
           const sources=this.shared.get(ref.path)??[];if(!sources.includes(note.path))sources.push(note.path);this.shared.set(ref.path,sources);
         }
       }
-      if(this.abort.signal.aborted)return;list.empty();
+      if(!current())return;list.empty();
+      const unresolved=this.refs.filter(ref=>!ref.path).length;if(unresolved)list.createEl('p',{text:`${unresolved} 条引用未能关联真实文件，已保护跳过；不会按文件名猜测。`});
       if(!refs.length){list.createEl('p',{text:'没有可处理的库内图片。选定文件范围使用文件菜单；未知 URL 不猜测原件。'});return;}
       for(const ref of refs){const path=ref.path!,shared=this.shared.get(path)??[];const skip=shared.length>1&&c['compression.includeShared']==='skip';
         const chosen=!skip&&shared.length<=1&&(ref.evidence==='direct'||(ref.evidence==='dynamic'&&!!c['scope.dynamicSelected']));if(chosen)this.selected.add(path);
         const row=new Setting(list).setName(path).setDesc(`${ref.evidence} · ${ref.origin}${shared.length>1?' · 共享于 '+shared.join(', '):''}${skip?' · 已按设置跳过':''}`);
         row.addToggle(t=>t.setValue(chosen).setDisabled(skip).onChange(v=>{if(v)this.selected.add(path);else this.selected.delete(path);}));
       }
-    }catch(e){if(!this.abort.signal.aborted){list.empty();list.createEl('p',{text:String(e)});}}
+    }catch(e){if(current()){list.empty();list.createEl('p',{text:String(e)});}}
   }
   override onClose():void {this.abort.abort();this.contentEl.empty();}
+}
+class MediaPicker extends FuzzySuggestModal<TFile>{
+  constructor(app:App,private index:ReferenceIndex,private choose:(file:TFile)=>void){super(app);this.setPlaceholder('输入图片文件名或路径 / Search image path');}
+  override getItems():TFile[]{return this.app.vault.getFiles().filter(file=>this.index.eligible(file));}
+  override getItemText(file:TFile):string{return file.path;}
+  override onChooseItem(file:TFile):void{this.choose(file);}
 }
 class PrepareModal extends Modal {
   private allowClose=false;

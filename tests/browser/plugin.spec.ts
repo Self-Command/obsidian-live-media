@@ -12,7 +12,7 @@ test('downloaded main.js registers public plugin entries, loads settings and unl
       registerMarkdownPostProcessor(p:unknown){entries.post.push(p);}registerEditorExtension(e:unknown){entries.extensions.push(e);}registerEvent(e:unknown){entries.events.push(e);}
     }
     class Modal{}class Setting{}class PluginSettingTab{constructor(..._:unknown[]){} }class Notice{}
-    const obs={Plugin,Modal,Setting,PluginSettingTab,Notice,TFile:class{},Component,MarkdownRenderChild,Platform:{isDesktopApp:false,isIosApp:false,isAndroidApp:false},editorInfoField:{},FileSystemAdapter:class{}};
+    const obs={Plugin,Modal,FuzzySuggestModal:Modal,Setting,PluginSettingTab,Notice,TFile:class{},Component,MarkdownRenderChild,Platform:{isDesktopApp:false,isIosApp:false,isAndroidApp:false},editorInfoField:{},FileSystemAdapter:class{}};
     const module={exports:{}as any};
     Function('require','module','exports',source)((name:string)=>{if(name==='obsidian')return obs;if(name==='@codemirror/view')return {ViewPlugin:{fromClass:(c:unknown)=>c}};throw new Error('Unexpected runtime dependency '+name);},module,module.exports);
     const plugin=new module.exports.default();plugin.app={
