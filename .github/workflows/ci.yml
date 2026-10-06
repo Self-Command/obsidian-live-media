@@ -19,6 +19,7 @@ jobs:
         with: {node-version: '24'}
       - run: npm ci
       - run: npm run check
+      - run: npm test
       - name: Pinned Emscripten toolchain
         run: |
           git clone --quiet https://github.com/emscripten-core/emsdk.git build-emsdk
