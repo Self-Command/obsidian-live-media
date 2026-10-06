@@ -17,6 +17,7 @@ interface HdrCore {
   _lm_reencode(p: number, n: number, q: number): number;
   _lm_output_size(): number;
   _lm_fixture(): number;
+  _lm_error(): number;
 }
 const scope = self as unknown as {
   importScripts(...urls: string[]): void;
@@ -78,7 +79,7 @@ scope.onmessage = async (event) => {
           if (op === 'hdr-probe') result = hdr._lm_probe(p, b.length);
           else {
             const output = hdr._lm_reencode(p, b.length, data.quality as number);
-            if (!output) throw new Error('HDR intent reconstruction failed');
+            if (!output) {const start=hdr._lm_error();let end=start;while(hdr.HEAPU8[end]&&end<start+256)end++;throw new Error('HDR intent reconstruction failed: '+new TextDecoder().decode(hdr.HEAPU8.subarray(start,end)));}
             result = hdr.HEAPU8.slice(output, output + hdr._lm_output_size());
           }
         } finally {hdr._free(p);}

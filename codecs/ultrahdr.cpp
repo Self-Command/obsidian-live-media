@@ -3,9 +3,11 @@
 #include "ultrahdr_api.h"
 #include <vector>
 #include <cstring>
+#include <string>
 #include <emscripten/emscripten.h>
 static std::vector<unsigned char> output;
-static bool ok(uhdr_error_info_t e) { return e.error_code == UHDR_CODEC_OK; }
+static std::string last_error;
+static bool ok(uhdr_error_info_t e) { if(e.error_code != UHDR_CODEC_OK) last_error = e.has_detail ? e.detail : "codec error"; return e.error_code == UHDR_CODEC_OK; }
 static uhdr_compressed_image_t input_image(void* p, int n) {
   uhdr_compressed_image_t image{};
   image.data = p; image.data_sz = n; image.capacity = n;
@@ -15,6 +17,7 @@ static uhdr_compressed_image_t input_image(void* p, int n) {
 }
 extern "C" {
 EMSCRIPTEN_KEEPALIVE int lm_output_size() { return output.size(); }
+EMSCRIPTEN_KEEPALIVE const char* lm_error() { return last_error.c_str(); }
 EMSCRIPTEN_KEEPALIVE int lm_probe(void* p, int n) {
   auto d = uhdr_create_decoder(); auto image = input_image(p, n);
   bool valid = ok(uhdr_dec_set_image(d, &image)) && ok(uhdr_dec_probe(d));
