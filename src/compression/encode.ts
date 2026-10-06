@@ -9,6 +9,7 @@ import {exifOrientation,minimalExif,scrubGpsSegment,applePhotoId} from '../media
 import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
 import {xmpTags,namespaces,cameraNamespace,itemNamespace} from '../media/xmp';
 import {trustedApplePair,validateAppleMovie} from '../media/apple';
+import {graftAppleVideo} from '../media/graft';
 export interface Encoded {bytes: Uint8Array; before: MediaProbe; after: MediaProbe; backend: string; warnings: string[]}
 export class ProtectedMedia extends Error {}
 export class Compressor {
@@ -148,12 +149,13 @@ export class Compressor {
     const cancel=()=>backend.destroy();signal.addEventListener('abort',cancel,{once:true});
     try{
       if(signal.aborted)throw new Error('Cancelled');await backend.validate(movie);
-      const args=['-v','error','-noautorotate','-i','$INPUT','-map','0','-map_metadata','0','-c','copy'];
+      const args=['-v','error','-noautorotate','-i','$INPUT','-map','0:v:0','-map_metadata','0','-c','copy'];
       if(c['compression.allowLossy']&&c['compression.preset']!=='lossless'){
         const crf=c['compression.videoQuality']==='high'?18:c['compression.videoQuality']==='balanced'?23:Number(c['compression.ffmpegCrf']);
         args.push('-c:v','libx264','-crf',String(crf),'-fps_mode','passthrough','-enc_time_base:v','-1');
       }
-      args.push('-movflags','use_metadata_tags','$OUTPUT');const output=await backend.encode(movie,'mov',args);
+      args.push('$OUTPUT');const videoOnly=await backend.encode(movie,'mov',args);
+      const output=graftAppleVideo(movie,videoOnly);
       await backend.validate(output);await validateAppleMovie(movie,output);
       if(!trustedApplePair(photo,output))throw new Error('Output Apple pair no longer trusted');
       if(output.length>=movie.length||(1-output.length/movie.length)*100<Number(c['compression.minSavingPercent']))throw new ProtectedMedia('Apple movie does not meet savings threshold');

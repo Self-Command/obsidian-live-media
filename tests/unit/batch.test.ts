@@ -32,7 +32,7 @@ it('does not replace when backup readback is corrupted',async()=>{
   const [j]=await m.batch.commit([i],{...defaults(),'compression.output':'replace'});expect(j?.error).toContain('Backup readback failed');expect(m.files.get(i.path)).toEqual(i.input);
 });
 it('blocks reentry and honours cancellation while preparing',async()=>{
-  const m=memory(),i=await item();m.files.set(i.path,i.input);
+  const m=memory(),i=await item();i.path='photo.png';m.files.set(i.path,i.input);
   let resolve!:(v:unknown)=>void;m.compressor.encode=vi.fn(()=>new Promise(r=>{resolve=r;}))as Compressor['encode'];
   const task=m.batch.prepare([i.path],defaults());await vi.waitFor(()=>expect(m.compressor.encode).toHaveBeenCalled());
   await expect(m.batch.prepare([i.path],defaults())).rejects.toThrow('Batch already active');m.batch.cancel();resolve(i.encoded);await task;expect(m.batch.busy).toBe(false);expect(m.files.get(i.path)).toEqual(i.input);
