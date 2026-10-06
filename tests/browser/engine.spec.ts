@@ -22,9 +22,11 @@ test('offline FFmpeg + UltraHDR load, decode, encode, cancel and reload', async 
     let cancelled = false;
     try {await pending;} catch {cancelled = true;}
     await e.load(); e.destroy();
-    return {colorError,valid, validAfter, hdrBytes: hdr.length, compressedBytes: compressed.length, pngBytes: png.length, cancelled};
+    const oldLoad=e.load();e.destroy();const newLoad=e.load();let cancelledLoad=false;try{await oldLoad;}catch{cancelledLoad=true;}await newLoad;e.destroy();
+    return {cancelledLoad,colorError,valid, validAfter, hdrBytes: hdr.length, compressedBytes: compressed.length, pngBytes: png.length, cancelled};
   });
   expect(result.valid).toBe(1); expect(result.validAfter).toBe(1);
   expect(result.pngBytes).toBeGreaterThan(50); expect(result.cancelled).toBe(true);
   expect(result.colorError).toBeGreaterThanOrEqual(0);expect(result.colorError).toBeLessThanOrEqual(.1);
+  expect(result.cancelledLoad).toBe(true);
 });

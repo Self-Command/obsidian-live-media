@@ -16,7 +16,9 @@ export class ProtectedMedia extends Error {}
 export class Compressor {
   constructor(public engine: OfflineEngine,private native?:()=>OfflineEngine|undefined){}
   async encode(input:Uint8Array,extension:string,c:Config,signal:AbortSignal,intermediate=false):Promise<Encoded>{
+    extension=extension.toLowerCase();
     const before=probe(input);const warnings:string[]=[];
+    if(['jpeg','png','webp'].includes(before.format)&&!(before.format==='jpeg'?['jpg','jpeg']: [before.format]).includes(extension))throw new ProtectedMedia('File extension disagrees with probed image format');
     if(input.length>Number(c['performance.maxInputMiB'])*1048576)throw new ProtectedMedia('Input exceeds configured memory budget');
     if(before.width&&before.height&&before.width*before.height>Number(c['performance.maxPixelsMp'])*1000000)throw new ProtectedMedia('Pixel budget exceeded');
     const hdrPhoto=before.hdr&&before.format==='jpeg';
@@ -60,7 +62,7 @@ export class Compressor {
             const rebuilt=retainHdrComments(photo,await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array);
             verifyHdrMetadata(photo,rebuilt);
             const colorError=Number(await this.engine.run('hdr-compare',{before:photo,after:rebuilt}));
-            if(colorError<0||colorError>.1)throw new ProtectedMedia('HDR gamut/dimensions or linear-light relative RMS protection failed: '+colorError);
+            if(!Number.isFinite(colorError)||colorError<0||colorError>.1)throw new ProtectedMedia('HDR gamut/dimensions or linear-light relative RMS protection failed: '+colorError);
             if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
             bytes=addMotionToHdr(rebuilt,output,before.timestamp);
             if(await this.engine.run('hdr-probe',{input:bytes.slice(0,probe(bytes).videoStart)})!==1)throw new Error('Final gain-map decode failed');
@@ -90,7 +92,7 @@ export class Compressor {
           bytes=retainHdrComments(input,await this.engine.run('hdr-reencode',{input,quality:Number(c['compression.jpegQuality'])})as Uint8Array);
           verifyHdrMetadata(input,bytes);
           const colorError=Number(await this.engine.run('hdr-compare',{before:input,after:bytes}));
-          if(colorError<0||colorError>.1)throw new ProtectedMedia('HDR gamut/dimensions or linear-light relative RMS protection failed: '+colorError);
+          if(!Number.isFinite(colorError)||colorError<0||colorError>.1)throw new ProtectedMedia('HDR gamut/dimensions or linear-light relative RMS protection failed: '+colorError);
           mpfPictures(bytes);if(await this.engine.run('hdr-probe',{input:bytes})!==1)throw new Error('Reconstructed HDR full decode failed');
         }else if(before.format==='jpeg'){
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])

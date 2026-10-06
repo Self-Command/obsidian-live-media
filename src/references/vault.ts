@@ -9,10 +9,11 @@ export class ReferenceIndex {
   register(provider: ReferenceProvider): () => void {
     if(provider.version!==1||!/^[-\w]{1,64}$/.test(provider.id)||this.providers.has(provider.id))throw new Error('Provider identity/version rejected');
     this.providers.set(provider.id,provider);
-    return ()=>{if(this.providers.get(provider.id)===provider){this.providers.delete(provider.id);provider.dispose?.();}};
+    return ()=>{if(this.providers.get(provider.id)===provider){this.providers.delete(provider.id);try{provider.dispose?.();}catch{/* provider cleanup cannot stop plugin cleanup */}}};
   }
   resolve(ref: Reference): Reference {
     if(/^(https?:|data:|blob:|file:|app:)/i.test(ref.link))return {...ref,evidence:'unresolved',reason:'Remote or rendered URL needs verified source identity'};
+    const exact=this.app.metadataCache.getFirstLinkpathDest(ref.link,ref.source);if(exact instanceof TFile)return {...ref,path:exact.path};
     let link=ref.link;
     try{link=decodeURIComponent(link);}catch{return {...ref,evidence:'unresolved',reason:'Malformed encoded path'};}
     const file=this.app.metadataCache.getFirstLinkpathDest(link,ref.source);
@@ -28,10 +29,10 @@ export class ReferenceIndex {
     const switches=c['detect.providers'] as Record<string,unknown>;
     for(const provider of this.providers.values())if(switches[provider.id]!==false){
       if(signal.aborted)throw new Error('Cancelled');
-      let timeout:ReturnType<typeof setTimeout>|undefined;
-      try{const values=await Promise.race([provider.references(file.path,signal),new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Provider timeout')),3000);})]);
+      let timeout:ReturnType<typeof setTimeout>|undefined;const providerAbort=new AbortController();const abort=()=>providerAbort.abort();signal.addEventListener('abort',abort,{once:true});
+      try{const values=await Promise.race([provider.references(file.path,providerAbort.signal),new Promise<never>((_,reject)=>{timeout=setTimeout(()=>{providerAbort.abort();reject(new Error('Provider timeout'));},3000);})]);
         for(const value of values.slice(0,10000))if(value.source===file.path&&typeof value.link==='string'&&['direct','dynamic','candidate','unresolved'].includes(value.evidence))refs.push(value);
-      }catch{/* provider failure cannot abort other references */}finally{clearTimeout(timeout);}
+      }catch{/* provider failure cannot abort other references */}finally{clearTimeout(timeout);signal.removeEventListener('abort',abort);providerAbort.abort();}
     }
     return mergeReferences(refs.map(ref=>this.resolve(ref)));
   }
@@ -51,6 +52,6 @@ export class ReferenceIndex {
     const includes=c['scope.includeFolders'] as string[],excludes=c['scope.excludeFolders'] as string[];
     return (!includes.length||includes.some(within))&&!excludes.some(within);
   }
-  destroy(): void {for(const p of this.providers.values())p.dispose?.();this.providers.clear();}
+  destroy(): void {for(const p of this.providers.values())try{p.dispose?.();}catch{/* isolate provider cleanup */}this.providers.clear();}
   invalidate():void{this.resourceLookup=undefined;}
 }

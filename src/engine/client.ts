@@ -31,7 +31,7 @@ export class OfflineEngine {
       };
       this.worker.onerror = () => this.destroy(new Error('Offline worker failed'));
       await this.request('load', {coreURL: url(core!), wasm, hdrURL: url(hdrCode!), hdrWasm});
-    })().catch(e => {this.destroy(); throw e;});
+    })().catch(e => {if(this.epoch===epoch)this.destroy(); throw e;});
     return this.ready;
   }
   private request(op: string, data: Record<string, unknown>): Promise<unknown> {
@@ -40,7 +40,7 @@ export class OfflineEngine {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => this.destroy(new Error('Encoding timeout')), 180000);
       this.pending.set(id, {resolve, reject, timer});
-      this.worker!.postMessage({id, op, data});
+      try{this.worker!.postMessage({id, op, data});}catch(error){clearTimeout(timer);this.pending.delete(id);reject(error instanceof Error?error:new Error('Worker transfer failed'));}
     });
   }
   async run(op: string, data: Record<string, unknown>): Promise<unknown> {await this.load(); return this.request(op, data);}

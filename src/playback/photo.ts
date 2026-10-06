@@ -91,7 +91,9 @@ export class Photo {
     const c=this.config();const reduced=!!c['accessibility.respectReducedMotion']&&matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.video.style.transition=`opacity ${reduced?0:c['appearance.transitionMs']}ms`;
     this.video.style.objectFit=getComputedStyle(this.img).objectFit||'contain';
-    this.badge.textContent=String(c['badge.style'])==='ring'?'◉':String(c['badge.style'])==='text'?String(c['badge.text']):'◉ '+String(c['badge.text']);
+    this.badge.replaceChildren();
+    if(c['badge.style']!=='text'){const icon=this.badge.ownerDocument.createElement('span');icon.textContent='◉';icon.style.fontSize=String(c['badge.sizePx'])+'px';icon.style.lineHeight='1';this.badge.append(icon);}
+    if(c['badge.style']!=='ring'){const text=this.badge.ownerDocument.createElement('span');text.textContent=String(c['badge.text']);this.badge.append(text);}
     this.badge.style.display=c['badge.enabled']?'':'none';this.badge.style.opacity=String(c['badge.opacity']);
     this.badge.style.fontSize=String(c['badge.textPx'])+'px';this.badge.style.minHeight=String(c['badge.sizePx'])+'px';
     this.badge.style.borderRadius=String(c['badge.radiusPx'])+'px';

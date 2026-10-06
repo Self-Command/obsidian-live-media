@@ -43,7 +43,7 @@ export function validateField(field: Field, value: unknown): Value {
     if (field.key === 'storage.copySuffix' && (!value || value.length > 24 || /[\u0000-\u001f\/:*?"<>|\\]/.test(value))) throw new Error('Unsafe suffix');
     if (field.key.endsWith('Directory') && value !== 'alongside') safePath(value, field.key !== 'storage.copyDirectory');
     if (field.key === 'badge.color' || field.key === 'badge.background') {
-      if (!/^(theme|transparent|#[0-9a-fA-F]{3,8}|(?:rgb|hsl)a?\([0-9.% ,/]+\))$/.test(value)) throw new Error('Use theme, transparent or a CSS color');
+      if (!/^(theme|transparent|#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(?:rgb|hsl)a?\([0-9.% ,/]+\))$/.test(value)) throw new Error('Use theme, transparent or a CSS color');
     }
     if (field.key === 'native.executable' && value && !/^(?:[a-zA-Z]:[\\/]|\/)/.test(value)) throw new Error('Native executable needs absolute path');
   }

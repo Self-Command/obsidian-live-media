@@ -18,6 +18,11 @@ it('maps rendered Vault resource identities and rebuilds the lookup after rename
   expect(index.rendered(image,note.path).path).toBe(b.path);b.path='b/renamed.jpg';index.invalidate();expect(index.rendered(image,note.path).path).toBeUndefined();
   expect(index.rendered({currentSrc:'app://resource/b%2Frenamed.jpg'}as HTMLImageElement,note.path).path).toBe(b.path);
 });
+it('keeps a literal percent filename and isolates provider disposal exceptions',async()=>{
+  const {index,files}=fixture();files.push(Object.assign(new TFile(),{path:'b/100%.jpg',extension:'jpg'}));
+  expect(index.resolve({source:'b/note.md',link:'100%.jpg',evidence:'direct',origin:'native',offset:0}).path).toBe('b/100%.jpg');
+  const off=index.register({id:'faulty-cleanup',version:1,references:async()=>[],dispose:()=>{throw new Error('Fail');}});expect(()=>off()).not.toThrow();expect(()=>index.destroy()).not.toThrow();
+});
 it('isolates faulty providers, validates source and disposes registration',async()=>{
   const {index,note}=fixture(),dispose=vi.fn();const unregister=index.register({id:'bad',version:1,references:async()=>{throw new Error('Failed');},dispose});
   index.register({id:'good',version:1,references:async()=>[{source:note.path,link:'a/hero.jpg',evidence:'dynamic',origin:'plugin',offset:0},{source:'wrong.md',link:'b/hero.jpg',evidence:'direct',origin:'plugin',offset:0}]});

@@ -59,6 +59,18 @@ test('theme variables update LIVE appearance and repeated mount/unmount releases
     return {colors,releases,remaining:coord.photos.size,videos:document.querySelectorAll('video').length};
   });expect(result).toEqual({colors:['rgb(20, 30, 40)','rgb(230, 235, 240)'],releases:24,remaining:0,videos:0});
 });
+test('sound denial falls back to muted without adding controls and a manual photo blocks automatic competition',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,c=h.defaults();c['auto.mode']='every-enter';c['auto.cooldownMs']=0;c['auto.delayMs']=60000;const coord=new h.PlaybackCoordinator(()=>c),notices:string[]=[];
+    const photos=[0,1].map(()=>{const box=document.createElement('div');document.body.append(box);const img=document.createElement('img');box.append(img);return new h.Photo(img,'',()=>c,coord,()=>false,()=>{},(s:string)=>notices.push(s),()=>{});});
+    const videos=[...document.querySelectorAll('video')];const attempts:boolean[]=[];
+    videos[0]!.removeAttribute('src');videos[0]!.pause=()=>{};videos[0]!.play=async()=>{attempts.push(videos[0]!.muted);if(!videos[0]!.muted)throw new DOMException('Denied','NotAllowedError');};
+    videos[1]!.removeAttribute('src');videos[1]!.pause=()=>{};videos[1]!.play=async()=>{};
+    await photos[0]!.play(true);await photos[1]!.play(false);const blocked=!photos[1]!.playing;
+    const controls=videos.some(v=>v.controls);photos.forEach(p=>p.destroy());return {attempts,blocked,controls,notices:notices.length};
+  });expect(result).toEqual({attempts:[false,true],blocked:true,controls:false,notices:1});
+});
 test('long press cancels on release, multi-touch stays native, keyboard and unload preserve host styling',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
   const result=await page.evaluate(async()=>{

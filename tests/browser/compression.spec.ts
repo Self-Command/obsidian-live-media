@@ -73,10 +73,12 @@ test('lossless PNG preserves decoded RGBA; animated and unknown resources are pr
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
   const r=await page.evaluate(async()=>{
     const h=(window as any).liveMediaHarness,e=h.engine;
-    const png=await e.encode(new Uint8Array(),'png',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-compression_level','0','$OUTPUT']);
+    const png=await e.encode(new Uint8Array(),'png',['-f','lavfi','-i','color=c=red@0.25:s=128x128,format=rgba','-frames:v','1','-compression_level','0','$OUTPUT']);
+    const rgba=await e.encode(png,'png',['-i','$INPUT','-frames:v','1','-f','rawvideo','-pix_fmt','rgba','$OUTPUT'],'raw');
     const c=h.defaults();c['compression.minSavingPercent']=0;const out=await new h.Compressor(e).encode(png,'png',c,new AbortController().signal);
     let rejected=false;try{await new h.Compressor(e).encode(new TextEncoder().encode('GIF89a'),'gif',c,new AbortController().signal);}catch{rejected=true;}
-    e.destroy();return {format:out.after.format,saving:out.bytes.length<png.length,rejected};
+    e.destroy();return {alpha:rgba[3],format:out.after.format,saving:out.bytes.length<png.length,rejected};
   });
   expect(r.format).toBe('png');expect(r.saving).toBe(true);expect(r.rejected).toBe(true);
+  expect(r.alpha).toBeGreaterThan(0);expect(r.alpha).toBeLessThan(255);
 });

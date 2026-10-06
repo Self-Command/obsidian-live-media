@@ -44,9 +44,15 @@ export class ScanModal extends Modal {
         if(c['detect.rendered'])for(const img of (this.app.workspace.getMostRecentLeaf()?.view.containerEl??this.app.workspace.containerEl).querySelectorAll<HTMLImageElement>('img')){
           const ref=this.index.rendered(img,file.path);if(ref.path)this.refs.push(ref);
         }
-        if(c['scope.embeddedNotes'])for(const ref of [...this.refs]){
-          const target=ref.path?this.app.vault.getAbstractFileByPath(ref.path):null;
-          if(target instanceof TFile&&target.extension==='md')this.refs.push(...await this.index.note(target,this.abort.signal));
+        if(c['scope.embeddedNotes']){
+          const visited=new Set([file.path]);const queue=[...this.refs];
+          while(queue.length){if(!current())return;const ref=queue.shift()!;if(ref.evidence!=='direct')continue;
+            const target=ref.path?this.app.vault.getAbstractFileByPath(ref.path):null;
+            if(target instanceof TFile&&target.extension==='md'&&!visited.has(target.path)){
+              if(visited.size>=1000)throw new Error('Embedded-note traversal limit reached; choose a smaller scope');visited.add(target.path);
+              const refs=await this.index.note(target,this.abort.signal);this.refs.push(...refs);queue.push(...refs);
+            }
+          }
         }
       }else{
         const files=this.range==='selected-files'?(this.initial??[]):this.app.vault.getFiles();
