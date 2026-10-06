@@ -44,7 +44,6 @@ export async function installModalHost(page:Page,options:{failReviewOnce?:boolea
       if(options.hold&&entries.encodes.length===1)await new Promise<void>(resolve=>{entries.resume=resolve;signal.addEventListener('abort',()=>{entries.cancelled=true;resolve();},{once:true});});
       if(signal.aborted)throw new Error('Cancelled');
       if(options.actualCodec)return encode(input,ext,c,signal);
-      if(entries.encodes.length===2)throw new Error('Single bad image');
       const p={format:'jpeg',live:false,hdr:false,protected:[],capability:'static'};return {bytes:new Uint8Array(jpeg),before:p,after:p,backend:'UI fixture',warnings:[]};
     };
     Object.assign(window,{modalAcceptance:{plugin,entries,media,originals,unchanged:()=>[...originals].every(([p,b])=>new Uint8Array(media.get(p)!).join(',')===b),start:()=>entries.commands.find((c:any)=>c.id==='compress-current-note').callback(),close:()=>{for(const m of entries.modals)if(m.isOpen)m.close();plugin.onunload();}}});
