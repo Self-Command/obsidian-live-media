@@ -13,6 +13,7 @@ interface HdrCore {
   HEAPU8: Uint8Array;
   _malloc(n: number): number;
   _free(p: number): void;
+  _lm_jpeg(p:number,n:number,quality:number):number;
   _lm_probe(p: number, n: number): number;
   _lm_reencode(p: number, n: number, q: number): number;
   _lm_output_size(): number;
@@ -75,13 +76,17 @@ scope.onmessage = async (event) => {
           if (core.ret !== 0) throw new Error('Full video/image decode failed: '+tail);
           result = true;
         } finally {core.reset(); core.FS.unlink(file);}
-      } else if (op === 'hdr-probe' || op === 'hdr-reencode') {
+      } else if (op === 'jpeg-encode' || op === 'jpeg-verify' || op === 'hdr-probe' || op === 'hdr-reencode') {
         const b = data.input as Uint8Array;
         const p = hdr._malloc(b.length);
         if (!p) throw new Error('HDR allocation failed');
         try {
           hdr.HEAPU8.set(b, p);
-          if (op === 'hdr-probe') result = hdr._lm_probe(p, b.length);
+          if(op==='jpeg-encode'||op==='jpeg-verify'){
+            const output=hdr._lm_jpeg(p,b.length,op==='jpeg-verify'?0:Number(data.quality));
+            if(!output){const start=hdr._lm_error();let end=start;while(hdr.HEAPU8[end]&&end<start+512)end++;throw new Error('JPEG codec failed: '+new TextDecoder().decode(hdr.HEAPU8.subarray(start,end)));}
+            result=op==='jpeg-verify'?true:hdr.HEAPU8.slice(output,output+hdr._lm_output_size());
+          }else if (op === 'hdr-probe') result = hdr._lm_probe(p, b.length);
           else {
             const output = hdr._lm_reencode(p, b.length, data.quality as number);
             if (!output) {const start=hdr._lm_error();let end=start;while(hdr.HEAPU8[end]&&end<start+256)end++;throw new Error('HDR intent reconstruction failed: '+new TextDecoder().decode(hdr.HEAPU8.subarray(start,end)));}

@@ -39,11 +39,15 @@ const server=http.createServer(async(req,res)=>{
   const page=await browser.newPage();page.setDefaultTimeout(180000);
   await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   await page.goto(addr('/'));await page.addScriptTag({url:addr('/harness.js')});
+  await page.exposeFunction('traceMedia',info=>fs.appendFileSync(path.join(output,'stages.ndjson'),JSON.stringify({at:new Date().toISOString(),...info})+'\n'));
+  await page.evaluate(()=>{const e=window.liveMediaHarness.engine,run=e.run.bind(e);e.run=async(op,data)=>{await window.traceMedia({index:window.photoIndex,op,state:'start'});try{const r=await run(op,data);await window.traceMedia({index:window.photoIndex,op,state:'done'});return r;}catch(error){await window.traceMedia({index:window.photoIndex,op,state:'failed',reason:String(error).slice(0,240)});throw error;}};});
+  if(process.env.PRIVATE_THREADS==='1')await page.evaluate(()=>{const e=window.liveMediaHarness.engine,encode=e.encode.bind(e);e.encode=(b,x,args,out)=>encode(b,x,['-threads','1','-filter_threads','1',...args.slice(0,-1),'-threads','1',args[args.length-1]],out);});
   const started=new Date();let passed=0,skipped=0,failed=0;
   for(let index=0;index<items.length;index++){
+   if(process.env.PRIVATE_ONLY&&!process.env.PRIVATE_ONLY.split(',').map(Number).includes(index))continue;
    const result=await page.evaluate(async({base,token,index,mode})=>{
-    const h=window.liveMediaHarness,e=h.engine,c=h.defaults();
-    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),150000);
+    window.photoIndex=index;const h=window.liveMediaHarness,e=h.engine,c=h.defaults();
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
     const started=performance.now();let input,p;
     try{
       input=new Uint8Array(await(await fetch(base+'/photo?token='+token+'&index='+index)).arrayBuffer());p=h.probe(input);

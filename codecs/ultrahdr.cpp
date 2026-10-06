@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Independent, minimal bridge to Google's public C API.
 #include "ultrahdr_api.h"
+#include <cstdio>
+#include <cstdlib>
+#include <csetjmp>
+extern "C" {
+#include "jpeglib.h"
+}
 #include <vector>
 #include <cstring>
 #include <string>
@@ -18,7 +24,51 @@ static uhdr_compressed_image_t input_image(void* p, int n) {
   image.range = UHDR_CR_UNSPECIFIED;
   return image;
 }
+struct JpegJob {
+  jpeg_decompress_struct decoder{}; jpeg_compress_struct encoder{};
+  jpeg_error_mgr errors{}; jmp_buf jump;
+  unsigned char* pixels=nullptr; unsigned char* encoded=nullptr; unsigned long encoded_size=0;
+  bool decoder_created=false,encoder_created=false;
+};
+static void jpeg_failure(j_common_ptr info) {
+  auto job=static_cast<JpegJob*>(info->client_data);char text[JMSG_LENGTH_MAX];
+  info->err->format_message(info,text);last_error=text;longjmp(job->jump,1);
+}
+static void jpeg_message(j_common_ptr info,int level){if(level<0)jpeg_failure(info);}
+static void jpeg_cleanup(JpegJob* job) {
+  if(job->encoder_created)jpeg_destroy_compress(&job->encoder);
+  if(job->decoder_created)jpeg_destroy_decompress(&job->decoder);
+  free(job->pixels);free(job->encoded);delete job;
+}
 extern "C" {
+// Full JPEG decoding and optional static reencode, using the pinned libjpeg-turbo
+// already built for UltraHDR. No autorotation or implicit color-space conversion.
+EMSCRIPTEN_KEEPALIVE unsigned char* lm_jpeg(void* p,int n,int quality) {
+  output.clear();last_error.clear();auto job=new JpegJob;
+  job->decoder.err=jpeg_std_error(&job->errors);job->errors.error_exit=jpeg_failure;job->errors.emit_message=jpeg_message;
+  job->decoder.client_data=job;
+  if(setjmp(job->jump)){jpeg_cleanup(job);return nullptr;}
+  jpeg_create_decompress(&job->decoder);job->decoder_created=true;job->decoder.client_data=job;
+  jpeg_mem_src(&job->decoder,static_cast<unsigned char*>(p),n);jpeg_read_header(&job->decoder,TRUE);
+  auto& d=job->decoder;
+  if(d.data_precision!=8||(d.num_components!=1&&d.num_components!=3)||d.image_width==0||d.image_height==0||
+    uint64_t(d.image_width)*d.image_height>48000000){last_error="JPEG precision, components or pixel budget unsupported";jpeg_cleanup(job);return nullptr;}
+  int h[3]={1,1,1},v[3]={1,1,1};for(int i=0;i<d.num_components;i++){h[i]=d.comp_info[i].h_samp_factor;v[i]=d.comp_info[i].v_samp_factor;}
+  d.out_color_space=d.num_components==1?JCS_GRAYSCALE:JCS_RGB;
+  jpeg_start_decompress(&d);size_t stride=size_t(d.output_width)*d.output_components;
+  job->pixels=static_cast<unsigned char*>(malloc(stride*d.output_height));
+  if(!job->pixels){last_error="JPEG allocation failed";jpeg_cleanup(job);return nullptr;}
+  while(d.output_scanline<d.output_height){JSAMPROW row=job->pixels+stride*d.output_scanline;if(jpeg_read_scanlines(&d,&row,1)!=1){last_error="Incomplete JPEG scan";jpeg_cleanup(job);return nullptr;}}
+  jpeg_finish_decompress(&d);
+  if(quality==0){output.push_back(1);jpeg_cleanup(job);return output.data();}
+  if(quality<1||quality>100){last_error="Invalid JPEG quality";jpeg_cleanup(job);return nullptr;}
+  auto& e=job->encoder;e.err=&job->errors;e.client_data=job;jpeg_create_compress(&e);job->encoder_created=true;e.client_data=job;
+  jpeg_mem_dest(&e,&job->encoded,&job->encoded_size);e.image_width=d.output_width;e.image_height=d.output_height;e.input_components=d.output_components;e.in_color_space=d.out_color_space;
+  jpeg_set_defaults(&e);for(int i=0;i<e.num_components;i++){e.comp_info[i].h_samp_factor=h[i];e.comp_info[i].v_samp_factor=v[i];}
+  jpeg_set_quality(&e,quality,TRUE);e.optimize_coding=TRUE;jpeg_start_compress(&e,TRUE);
+  while(e.next_scanline<e.image_height){JSAMPROW row=job->pixels+stride*e.next_scanline;jpeg_write_scanlines(&e,&row,1);}
+  jpeg_finish_compress(&e);output.assign(job->encoded,job->encoded+job->encoded_size);jpeg_cleanup(job);return output.empty()?nullptr:output.data();
+}
 EMSCRIPTEN_KEEPALIVE int lm_output_size() { return output.size(); }
 EMSCRIPTEN_KEEPALIVE const char* lm_error() { return last_error.c_str(); }
 EMSCRIPTEN_KEEPALIVE int lm_probe(void* p, int n) {

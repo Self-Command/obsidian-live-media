@@ -107,7 +107,7 @@ export class Compressor {
           const quality=Number(c['compression.jpegQuality']);
           const args=['-v','error','-noautorotate','-i','$INPUT','-frames:v','1','-q:v',String(Math.max(2,Math.round(31-(quality-50)*29/50)))];
           if(c['compression.resizeImage'])args.push('-vf',`scale='min(${c['compression.maxImageEdge']},iw)':'min(${c['compression.maxImageEdge']},ih)':force_original_aspect_ratio=decrease`);
-          args.push('$OUTPUT');bytes=await backend.encode(input,extension,args);
+          args.push('$OUTPUT');bytes=backend===this.engine&&!c['compression.resizeImage']?await this.engine.run('jpeg-encode',{input,quality})as Uint8Array:await backend.encode(input,extension,args);
           const keep=metadata.flatMap(s=>{
             if(s.marker===0xe1&&ascii(input,s.payload,6)==='Exif\0\0'){
               if(!c['compression.preserveExif'])return [minimalExif(exifOrientation(input))];

@@ -7,12 +7,12 @@ set(UHDR_ENABLE_INTRINSICS OFF CACHE BOOL "" FORCE)
 set(UHDR_BUILD_DEPS ON CACHE BOOL "" FORCE)
 add_subdirectory(${UHDR_SOURCE} ultrahdr)
 add_executable(live_hdr ultrahdr.cpp)
-target_include_directories(live_hdr PRIVATE ${UHDR_SOURCE})
+target_include_directories(live_hdr PRIVATE ${UHDR_SOURCE} ${UHDR_SOURCE}/third_party/turbojpeg/src ${CMAKE_BINARY_DIR}/ultrahdr/turbojpeg/src/turbojpeg-build)
 target_link_libraries(live_hdr PRIVATE uhdr)
 set_target_properties(live_hdr PROPERTIES SUFFIX ".js")
 target_link_options(live_hdr PRIVATE
   "-sMODULARIZE=1" "-sEXPORT_NAME=createUltraHDR" "-sENVIRONMENT=worker"
   "-sALLOW_MEMORY_GROWTH=1" "-sMAXIMUM_MEMORY=1073741824" "-sFILESYSTEM=0"
   "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']"
-  "-sEXPORTED_FUNCTIONS=['_malloc','_free','_lm_probe','_lm_reencode','_lm_output_size','_lm_fixture','_lm_error','_lm_compare']"
+  "-sEXPORTED_FUNCTIONS=['_malloc','_free','_lm_probe','_lm_reencode','_lm_output_size','_lm_fixture','_lm_error','_lm_compare','_lm_jpeg']"
   "--no-entry")

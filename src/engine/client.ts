@@ -47,7 +47,7 @@ export class OfflineEngine {
   async encode(input: Uint8Array, extension: string, args: string[], outputExtension = extension): Promise<Uint8Array> {
     return await this.run('execute', {input, extension, args, outputExtension}) as Uint8Array;
   }
-  async validate(input: Uint8Array): Promise<void> {await this.run('validate', {input});}
+  async validate(input: Uint8Array): Promise<void> {await this.run(input[0]===255&&input[1]===216?'jpeg-verify':'validate', {input});}
   destroy(reason = new Error('Cancelled')): void {
     this.epoch++; this.worker?.terminate(); this.worker = undefined; this.ready = undefined;
     for (const task of this.pending.values()) {clearTimeout(task.timer); task.reject(reason);}
