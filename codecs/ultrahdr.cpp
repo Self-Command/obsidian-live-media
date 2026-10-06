@@ -30,7 +30,10 @@ EMSCRIPTEN_KEEPALIVE unsigned char* lm_reencode(void* p, int n, int quality) {
   bool valid = ok(uhdr_dec_set_image(d, &image)) &&
                ok(uhdr_dec_set_out_img_format(d, UHDR_IMG_FMT_64bppRGBAHalfFloat)) &&
                ok(uhdr_dec_set_out_color_transfer(d, UHDR_CT_LINEAR)) && ok(uhdr_decode(d));
-  if (valid) valid = ok(uhdr_enc_set_raw_image(e, uhdr_get_decoded_image(d), UHDR_HDR_IMG));
+  // The decoder returns packed RGB samples in full range, but leaves the descriptor range unspecified.
+  // The encoder requires the range to be explicit for packed RGB input.
+  if (valid) { auto raw = *uhdr_get_decoded_image(d); raw.range = UHDR_CR_FULL_RANGE;
+              valid = ok(uhdr_enc_set_raw_image(e, &raw, UHDR_HDR_IMG)); }
   auto exif = valid ? uhdr_dec_get_exif(d) : nullptr;
   if (valid && exif && exif->data_sz) valid = ok(uhdr_enc_set_exif_data(e, exif));
   if (valid) valid = ok(uhdr_enc_set_quality(e, quality, UHDR_BASE_IMG)) &&

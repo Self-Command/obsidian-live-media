@@ -8,7 +8,7 @@ import {ByteCache} from '../../src/playback/cache';
 const utf=(s:string)=>new TextEncoder().encode(s);
 function box(type:string,payload:Uint8Array):Uint8Array{const b=new Uint8Array(8+payload.length);new DataView(b.buffer).setUint32(0,b.length);b.set(utf(type),4);b.set(payload,8);return b;}
 const video=concat(box('ftyp',utf('isom0000')),box('moov',new Uint8Array()),box('mdat',utf('placeholder-container-not-a-decode-fixture')));
-function jpeg(xmp:string,extra=new Uint8Array()):Uint8Array{const text=utf('http://ns.adobe.com/xap/1.0/\0'+xmp),segment=new Uint8Array(4+text.length);segment.set([255,225]);new DataView(segment.buffer).setUint16(2,text.length+2);segment.set(text,4);return concat(Uint8Array.of(255,216),segment,Uint8Array.of(255,217),extra);}
+function jpeg(xmp:string,extra:Uint8Array=new Uint8Array()):Uint8Array{const text=utf('http://ns.adobe.com/xap/1.0/\0'+xmp),segment=new Uint8Array(4+text.length);segment.set([255,225]);new DataView(segment.buffer).setUint16(2,text.length+2);segment.set(text,4);return concat(Uint8Array.of(255,216),segment,Uint8Array.of(255,217),extra);}
 describe('schema contract and override boundaries',()=>{
   it('contains exactly 113 unique validated default fields',()=>{
     expect(schema).toHaveLength(113);expect(new Set(schema.map(f=>f.key)).size).toBe(113);
