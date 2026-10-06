@@ -27,9 +27,9 @@ EMSCRIPTEN_KEEPALIVE int lm_probe(void* p, int n) {
 EMSCRIPTEN_KEEPALIVE unsigned char* lm_reencode(void* p, int n, int quality) {
   output.clear(); auto d = uhdr_create_decoder(); auto e = uhdr_create_encoder();
   auto image = input_image(p, n);
-  bool valid = ok(uhdr_dec_set_image(d, &image)) && ok(uhdr_dec_probe(d));
-  if (valid) valid = ok(uhdr_dec_set_out_img_format(d, UHDR_IMG_FMT_64bppRGBAHalfFloat)) &&
-                     ok(uhdr_dec_set_out_color_transfer(d, UHDR_CT_LINEAR)) && ok(uhdr_decode(d));
+  bool valid = ok(uhdr_dec_set_image(d, &image)) &&
+               ok(uhdr_dec_set_out_img_format(d, UHDR_IMG_FMT_64bppRGBAHalfFloat)) &&
+               ok(uhdr_dec_set_out_color_transfer(d, UHDR_CT_LINEAR)) && ok(uhdr_decode(d));
   if (valid) valid = ok(uhdr_enc_set_raw_image(e, uhdr_get_decoded_image(d), UHDR_HDR_IMG));
   auto exif = valid ? uhdr_dec_get_exif(d) : nullptr;
   if (valid && exif && exif->data_sz) valid = ok(uhdr_enc_set_exif_data(e, exif));
