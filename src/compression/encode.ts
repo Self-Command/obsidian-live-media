@@ -2,6 +2,7 @@
 import {OfflineEngine} from '../engine/client';
 import {probe, type MediaProbe} from '../media/probe';
 import {replaceMotionVideo} from '../media/motion';
+import {restoreMotionEndTime} from '../media/timeline';
 import {validateVideoPreservation,validateCoverTime} from '../media/mp4';
 import {ascii, concat, equal, jpegSegments,u32} from '../media/bytes';
 import type {Config} from '../settings/model';
@@ -50,7 +51,8 @@ export class Compressor {
           if(c['compression.resizeVideo'])args.push('-vf',`scale='min(${c['compression.maxVideoEdge']},iw)':'min(${c['compression.maxVideoEdge']},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`);
         }
         args.push('-movflags','+faststart','$OUTPUT');
-        const output=c['compression.liveMode']==='photo-only'?video:await backend.encode(video,'mp4',args);
+        let output=c['compression.liveMode']==='photo-only'?video:await backend.encode(video,'mp4',args);
+        if(!lossless&&c['compression.liveMode']!=='photo-only'&&!c['compression.resizeVideo'])output=restoreMotionEndTime(video,output);
         await backend.validate(output);
         await validateVideoPreservation(video,output,!!c['compression.resizeVideo']);
         if(c['compression.liveMode']==='video-only')bytes=replaceMotionVideo(input,output);

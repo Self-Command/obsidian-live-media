@@ -109,3 +109,19 @@ test('sRGB and P3 JPEG compression keeps ICC, compares decoded color and permits
   expect(results.output).toEqual([{gamut:'srgb',smaller:true,profileSame:true,colorVerified:true},{gamut:'display-p3',smaller:true,profileSame:true,colorVerified:true}]);
   expect(results.live).toBe(true);expect(results.sameProfile).toBe(true);expect(results.rejected).toBe(true);expect(results.changedProfile).toBe(true);
 });
+
+test('last-frame duration restoration preserves every frame time and audio sample',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,source=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer()),changed=source.slice();
+    // Alter only the final stts duration in-place. The valid recipe has one run,
+    // so changing its count requires an independent single-last-sample writer.
+    const box=(b:Uint8Array,type:string)=>{for(let at=0;at+8<b.length;at++)if(new TextDecoder().decode(b.subarray(at+4,at+8))===type)return at;throw new Error('Missing '+type);};
+    const stts=box(changed,'stts'),view=new DataView(changed.buffer);view.setUint32(stts+20,view.getUint32(stts+20)+1);
+    let rejected=false;try{h.restoreMotionEndTime(source,changed);}catch(error){rejected=String(error).includes('presentation time');}
+    // Reencoding real video also exercises exact no-op or final-duration repair.
+    const c=h.defaults(),photo=await h.engine.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
+    const output=await h.engine.encode(source,'mp4',['-v','error','-noautorotate','-i','$INPUT','-map','0','-c','copy','-c:v','libx264','-crf','30','-fps_mode','passthrough','-enc_time_base:v','-1','$OUTPUT']);
+    const repaired=h.restoreMotionEndTime(source,output);await h.validateVideoPreservation(source,repaired);await h.engine.validate(repaired);h.engine.destroy();return {rejected,tracks:h.tracks(repaired).length};
+  });expect(result).toEqual({rejected:true,tracks:2});
+});
