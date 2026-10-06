@@ -10,6 +10,8 @@ An independently implemented Obsidian plugin for photo-style Live Photo playback
 
 This is a candidate, not a device-certified release. CI Chromium results do not establish Obsidian, Android/iOS or phone-gallery compatibility. Unsupported or unverified structures are protected and skipped with a reason.
 
+[下载当前候选](https://github.com/Self-Command/obsidian-live-media/releases/tag/candidate-22701926b0eb) · [对应 CI 验收](https://github.com/Self-Command/obsidian-live-media/actions/runs/37486748784)
+
 ## 使用流程
 
 1. 将指定 Actions 候选的 `main.js`、`manifest.json`、`styles.css` 放入**独立测试库**的 `.obsidian/plugins/live-media/`。三文件包含所需离线引擎，不需要 CDN。
@@ -29,7 +31,7 @@ Selected files can be added through the searchable file picker. Dynamic render r
 
 ## 文档
 
-- [使用和设置手册](docs/设置手册.md)、[113 项设置参考](docs/设置参考.md)
+- [使用和设置手册](docs/设置手册.md)、[113 项设置参考](docs/设置参考.md)、[通用插件来源接口](docs/ReferenceProvider.md)
 - [格式与插件兼容矩阵](docs/兼容矩阵.md)、[备份与恢复](docs/恢复说明.md)
 - [开发契约 v2](docs/插件开发文档.md)、[实施追踪](docs/实施计划.md)、[逐功能复检](docs/复检报告.md)
 - [编码器对应源码与构建说明](codecs/BUILDING.md)
