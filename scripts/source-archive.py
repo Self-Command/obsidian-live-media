@@ -22,4 +22,13 @@ for project in root.iterdir():
     candidates=list(project.glob('COPYING*'))+list(project.glob('LICENSE*'))
     for path in candidates:
         if path.is_file(): (licenses/(project.name+'-'+path.name)).write_bytes(path.read_bytes())
+for name,folder,names in [
+    ('zlib',root/'zlib',['README','LICENSE']),
+    ('libjpeg-turbo',root/'libultrahdr/third_party/turbojpeg',['LICENSE.md','README.ijg','README.md']),
+]:
+    copied=0
+    for filename in names:
+        path=folder/filename
+        if path.is_file(): (licenses/(name+'-'+filename)).write_bytes(path.read_bytes());copied+=1
+    if not copied:raise RuntimeError('Missing bundled dependency license: '+name)
 # Sources are those used to build this artifact, not a proposed reconstruction of an npm binary.

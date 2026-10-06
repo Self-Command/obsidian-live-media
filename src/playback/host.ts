@@ -94,8 +94,9 @@ export class HostSession extends MarkdownRenderChild {
           const finalURL=url,finalRelease=release;
           const photo=new Photo(img,url,()=>{
             const effective=this.manager.model.effective(file.path,noteOverrides());
-            if(gallery&&overrides['simple-gallery']==='viewer')effective['host.clickPriority']='viewer';
-            if(gallery&&overrides['simple-gallery']==='live')effective['host.clickPriority']='live';
+            const policy=(effective['compatibility.hostOverrides']as Record<string,unknown>)['simple-gallery'];
+            if(gallery&&policy==='viewer')effective['host.clickPriority']='viewer';
+            if(gallery&&policy==='live')effective['host.clickPriority']='live';
             return effective;
           },this.manager.coordinator,()=>this.manager.wasPreviewed(file.path),()=>this.manager.remember(file.path),this.manager.notice,
           ()=>{URL.revokeObjectURL(finalURL);finalRelease();},this.kind);
@@ -120,7 +121,11 @@ export class HostSession extends MarkdownRenderChild {
     if((this.kind==='reading'&&!c['render.reading'])||(this.kind==='preview'&&!c['render.livePreview'])){
       this.generation++;for(const {photo}of this.photos.values())photo.destroy();this.photos.clear();this.waiting.clear();return;
     }
-    for(const {photo}of this.photos.values())photo.refresh();this.scan();}
+    for(const [img,{photo}]of this.photos){
+      const gallery=img.matches('.simple-gallery-img')||!!img.closest('.simple-gallery-container, .simple-gallery-grid, .simple-gallery');
+      if(gallery&&(!c['render.gallery']||(c['compatibility.hostOverrides']as Record<string,unknown>)['simple-gallery']==='disabled')){photo.destroy();this.photos.delete(img);this.visibility?.unobserve(img);}
+      else photo.refresh();
+    }this.scan();}
   invalidate(path:string):void {this.generation++;this.negatives=new WeakMap();for(const [img,value]of this.photos)if(value.path===path){value.photo.destroy();this.photos.delete(img);}this.waiting.clear();this.scan();}
   destroy():void {this.unload();}
   override onunload():void {if(this.closed)return;this.closed=true;this.generation++;this.observer?.disconnect();this.visibility?.disconnect();this.queue=[];
