@@ -93,19 +93,38 @@ class MediaPicker extends FuzzySuggestModal<TFile>{
   override onChooseItem(file:TFile):void{this.choose(file);}
 }
 class PrepareModal extends Modal {
-  private allowClose=false;
+  private leaveForReview=false;private disposed=false;private prepared?:Prepared[];
+  private action?:HTMLButtonElement;private progress!:HTMLElement;
   constructor(app:App,private batch:BatchService,private paths:string[],private config:Config,private perFile:Map<string,Config>){super(app);}
   override onOpen():void {
-    this.contentEl.addClass('live-media');this.titleEl.setText('2 · 临时编码 / Prepare comparison');
-    this.contentEl.createEl('p',{text:'原件不会修改。编码结束后展示对比，只有最终确认才写入。'});
-    const progress=this.contentEl.createDiv();
-    new Setting(this.contentEl).addButton(b=>b.setButtonText('取消').onClick(()=>this.close()));
-    void this.batch.prepare(this.paths,this.config,item=>progress.createEl('p',{text:item.path+': '+(item.encoded?'已校验临时结果':item.reason)}),path=>this.perFile.get(path)??this.config).then(items=>{
-      if(!this.isOpen())return;this.allowClose=true;this.close();new CompareModal(this.app,this.batch,items,this.config).open();
-    }).catch(e=>{progress.createEl('p',{text:String(e)});});
+    this.disposed=false;this.contentEl.addClass('live-media');this.titleEl.setText('2 · 逐张压缩 / Compress one by one');
+    this.contentEl.createEl('p',{text:'每张依次读取、检查、压缩并校验，完成一张再处理下一张；单张失败继续。原件只读，确认后才保存结果。'});
+    const summary=this.contentEl.createEl('p',{cls:'live-media-progress-summary',text:`已完成 0 / ${this.paths.length}`});
+    const current=this.contentEl.createEl('p',{cls:'live-media-progress-current',attr:{role:'status','aria-live':'polite'}});
+    const meter=this.contentEl.createEl('progress',{cls:'live-media-progress',attr:{max:String(this.paths.length),value:'0','aria-label':'逐张压缩进度'}});
+    this.progress=this.contentEl.createDiv({cls:'live-media-progress-results'});
+    new Setting(this.contentEl).addButton(b=>{this.action=b.buttonEl;b.setButtonText('取消').onClick(()=>{if(this.prepared)this.review();else this.close();});});
+    let success=0,skipped=0,failed=0;const finished=new Set<string>();
+    void this.batch.prepare(this.paths,this.config,item=>{
+      if(this.disposed)return;finished.add(item.path);
+      if(item.encoded)success++;else if(item.outcome==='protected')skipped++;else failed++;
+      const completed=this.paths.filter(path=>finished.has(path)).length;meter.value=completed;
+      summary.setText(`已完成 ${completed} / ${this.paths.length} · 成功 ${success} · 跳过 ${skipped} · 失败 ${failed}`);
+      const row=this.progress.createEl('p',{cls:'live-media-progress-result',text:item.path+': '+(item.encoded?'压缩并校验成功':item.outcome==='protected'?'已保护跳过 · '+item.reason:'本张失败，继续下一张 · '+item.reason)});
+      row.dataset.outcome=item.encoded?'success':item.outcome==='protected'?'protected':'failed';
+    },path=>this.perFile.get(path)??this.config,(path,stage)=>{
+      if(this.disposed)return;current.setText(`当前 ${this.paths.indexOf(path)+1} / ${this.paths.length} · ${stage==='reading'?'读取':stage==='checking'?'检查':'压缩与校验'} · ${path}`);
+    }).then(items=>{
+      if(this.disposed)return;this.prepared=items;current.setText('逐张处理完成，正在打开对比结果…');this.review();
+    }).catch(error=>{if(!this.disposed){current.setText('批次停止');this.progress.createEl('p',{text:String(error)});}});
   }
-  private isOpen():boolean{return this.contentEl.isConnected;}
-  override onClose():void {if(!this.allowClose)this.batch.cancel();this.contentEl.empty();}
+  private review():void {
+    if(this.disposed||!this.prepared)return;
+    const review=new CompareModal(this.app,this.batch,this.prepared,this.config);
+    try{review.open();this.leaveForReview=true;this.close();}
+    catch(error){review.close();this.progress.createEl('p',{text:'对比面板未能打开；压缩结果仍保留，点击重试，无需重新压缩。 '+String(error)});if(this.action)this.action.textContent='重试打开结果';}
+  }
+  override onClose():void {this.disposed=true;if(!this.leaveForReview)this.batch.cancel();this.contentEl.empty();}
 }
 class CompareModal extends Modal {
   private coordinator:PlaybackCoordinator;private selected=new Set<string>();

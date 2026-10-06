@@ -19,12 +19,13 @@ export interface Journal {
   version:1;id:string;source:string;target:string;originalHash:string;outputHash:string;backup?:string;
   state:State;output:'copy'|'replace';timestamp:number;settingsHash:string;error?:string;group?:string;
 }
+export type PrepareStage='reading'|'checking'|'encoding';
 export interface Prepared {path:string;input:Uint8Array;inputBytes?:number;fingerprint:string;encoded?:Encoded;reason?:string;outcome?:'protected'|'failed';settingsHash:string;group?:string}
 export class BatchService {
   busy=false;private controller?:AbortController;
   constructor(private store:Store,private compressor:Compressor){}
   cancel():void{this.controller?.abort();this.compressor.engine.destroy();}
-  async prepare(paths:string[],baseConfig:Config,onProgress?:(item:Prepared)=>void,configFor?:(path:string)=>Config):Promise<Prepared[]> {
+  async prepare(paths:string[],baseConfig:Config,onProgress?:(item:Prepared)=>void,configFor?:(path:string)=>Config,onStage?:(path:string,stage:PrepareStage)=>void):Promise<Prepared[]> {
     if(this.busy)throw new Error('Batch already active');this.busy=true;this.controller=new AbortController();
     const result:Prepared[]=[];
     const processed=new Set<string>();
@@ -36,7 +37,7 @@ export class BatchService {
         const config=configFor?.(path)??baseConfig;const settingsHash=await hash(new TextEncoder().encode(JSON.stringify(config)));
         const item:Prepared={path,input:new Uint8Array(),fingerprint:'',settingsHash};
         try{
-          item.input=await this.store.read(path);item.inputBytes=item.input.length;item.fingerprint=await hash(item.input);
+          onStage?.(path,'reading');item.input=await this.store.read(path);onStage?.(path,'checking');item.inputBytes=item.input.length;item.fingerprint=await hash(item.input);
           if(previewBytes+item.input.length*2>previewBudget){item.input=new Uint8Array();throw new ProtectedMedia('Batch preview memory budget reached; select a smaller range');}
           const free=await this.store.availableBytes?.();
           if(free!==undefined&&free<item.input.length*4+Number(config['storage.diskReserveMiB'])*1048576)throw new ProtectedMedia('Insufficient free space reserve');
@@ -56,14 +57,14 @@ export class BatchService {
             if(!moviePath&&config['pairing.sameNameCandidates'])for(const ext of ['mov','MOV']){const candidate=path.replace(/\.[^.]+$/,'.'+ext);if(await this.store.exists(candidate)){moviePath=candidate;break;}}
             if(!moviePath)throw new ProtectedMedia('Apple movie candidate missing');
             const movie=await this.store.read(moviePath);if(previewBytes+(item.input.length+movie.length)*2>previewBudget)throw new ProtectedMedia('Pair exceeds preview budget');
-            const encoded=await this.compressor.encodeApple(item.input,movie,config,this.controller.signal);const group=crypto.randomUUID();item.group=group;
+            onStage?.(path,'encoding');const encoded=await this.compressor.encodeApple(item.input,movie,config,this.controller.signal);const group=crypto.randomUUID();item.group=group;
             const photoProbe=probe(item.input);
             item.encoded={bytes:encoded.photo,before:photoProbe,after:photoProbe,backend:'wasm',warnings:['Trusted Apple media group; static photo unchanged.']};
             const movieProbe:MediaProbe={format:'mov',live:true,hdr:false,protected:[],capability:'play-only'};
             const companion:Prepared={path:moviePath,input:new Uint8Array(),inputBytes:movie.length,fingerprint:await hash(movie),settingsHash,group,encoded:{bytes:encoded.movie,before:movieProbe,after:movieProbe,backend:'wasm',warnings:['Apple metadata/audio/timed samples verified; phone recognition still needs device acceptance.']}};
             result.push(companion);onProgress?.(companion);previewBytes+=encoded.movie.length;
             processed.add(moviePath);
-          }else item.encoded=await this.compressor.encode(item.input,path.split('.').at(-1)!,config,this.controller.signal);
+          }else{onStage?.(path,'encoding');item.encoded=await this.compressor.encode(item.input,path.split('.').at(-1)!,config,this.controller.signal);}
           previewBytes+=item.encoded.bytes.length;
           item.input=new Uint8Array(); // Original is re-read and fingerprint-checked only when previewed or committed.
         }catch(e){item.reason=String(e);item.outcome=e instanceof ProtectedMedia?'protected':'failed';}

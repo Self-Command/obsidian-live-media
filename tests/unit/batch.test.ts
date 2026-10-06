@@ -69,3 +69,14 @@ it('large batches release original bytes and re-read a verified original for rep
   const logs=await m.batch.commit([prepared[0]!],{...c,'compression.output':'replace'});
   expect(logs[0]?.state).toBe('committed');expect(m.files.get(logs[0]!.backup!)).toEqual(input);
 });
+
+it('finishes one file before reading the next, de-duplicates paths and continues after a single encoding failure',async()=>{
+  const m=memory(),i=await item(),events:string[]=[];
+  for(const path of ['first.png','broken.png','last.png'])m.files.set(path,i.input);
+  m.compressor.encode=vi.fn(async()=>{const n=(m.compressor.encode as any).mock.calls.length;events.push('encode:'+n);if(n===2)throw new Error('Broken file');return i.encoded!;}) as Compressor['encode'];
+  const prepared=await m.batch.prepare(['first.png','broken.png','first.png','last.png'],defaults(),item=>events.push('done:'+item.path),undefined,(path,stage)=>events.push(stage+':'+path));
+  expect(prepared.map(p=>p.outcome??'success')).toEqual(['success','failed','success']);expect(m.compressor.encode).toHaveBeenCalledTimes(3);
+  expect(events.indexOf('done:first.png')).toBeLessThan(events.indexOf('reading:broken.png'));
+  expect(events.indexOf('done:broken.png')).toBeLessThan(events.indexOf('reading:last.png'));
+  expect(m.files.size).toBe(3);
+});
