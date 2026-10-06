@@ -47,6 +47,8 @@ test('independent Apple graft keeps keyed timed samples, identity, original phot
     const h=(window as any).liveMediaHarness,e=h.engine,video=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer());
     const jpg=await e.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
     const pair=h.appleFixture(jpg,video);if(!h.trustedApplePair(pair.photo,pair.movie))throw new Error('Synthetic structural Apple pair rejected');
+    const forged=pair.movie.slice(),fakeSample=h.tracks(forged)[2].samples[0];new DataView(fakeSample.buffer,fakeSample.byteOffset).setUint32(4,0);
+    if(h.trustedApplePair(pair.photo,forged))throw new Error('Unreferenced still-image key incorrectly trusted');
     const c=h.defaults();c['compression.minSavingPercent']=0;c['compression.videoQuality']='custom';c['compression.ffmpegCrf']=30;
     const output=await new h.Compressor(e).encodeApple(pair.photo,pair.movie,c,new AbortController().signal);
     await h.validateAppleMovie(pair.movie,output.movie);await e.validate(output.movie);

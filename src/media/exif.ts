@@ -27,7 +27,9 @@ export function minimalExif(orientation:number):Uint8Array{
 }
 export function scrubGpsSegment(segment:Uint8Array):Uint8Array{
   const b=segment.slice();if(ascii(b,4,6)!=='Exif\0\0')throw new Error('Not EXIF');const base=10,t=tiff(b,base,b.length);
-  const main=t.entries(t.first);const gps=main.find(e=>e.tag===0x8825);if(!gps)return b;
+  const main=t.entries(t.first);const exifPointer=main.find(e=>e.tag===0x8769);
+  if(exifPointer&&t.entries(exifPointer.offset).some(e=>e.tag===0x927c))throw new Error('Proprietary MakerNote location removal is not verified');
+  const gps=main.find(e=>e.tag===0x8825);if(!gps)return b;
   const gpsEntries=t.entries(gps.offset);const gpsStart=base+gps.offset,gpsEnd=gpsStart+2+gpsEntries.length*12+4;
   const ranges=gpsEntries.filter(e=>e.end-e.start>4).map(e=>[e.start,e.end]);ranges.push([gpsStart,gpsEnd]);
   const exif=main.find(e=>e.tag===0x8769),other=[...main,...(exif?t.entries(exif.offset):[])].filter(e=>e!==gps);

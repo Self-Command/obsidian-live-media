@@ -10,7 +10,7 @@ import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
 import {xmpTags,namespaces,cameraNamespace,itemNamespace} from '../media/xmp';
 import {trustedApplePair,validateAppleMovie} from '../media/apple';
 import {graftAppleVideo} from '../media/graft';
-import {requireHdrMetadataWriter,verifyHdrMetadata} from '../media/hdr-metadata';
+import {requireHdrMetadataWriter,verifyHdrMetadata,retainHdrComments} from '../media/hdr-metadata';
 export interface Encoded {bytes: Uint8Array; before: MediaProbe; after: MediaProbe; backend: string; warnings: string[]}
 export class ProtectedMedia extends Error {}
 export class Compressor {
@@ -28,7 +28,7 @@ export class Compressor {
     const backend=c['compression.backend']==='native'?this.native?.():this.engine;
     if(!backend)throw new ProtectedMedia('Native backend not authorized on this device');
     if(!['jpg','jpeg','png','webp'].includes(extension.toLowerCase()))throw new ProtectedMedia('Extension and writer mismatch');
-    const cancel=()=>backend.destroy();signal.addEventListener('abort',cancel,{once:true});
+    const cancel=()=>{backend.destroy();if(before.hdr&&backend!==this.engine)this.engine.destroy();};signal.addEventListener('abort',cancel,{once:true});
     try{
       if(signal.aborted)throw new Error('Cancelled');
       let bytes:Uint8Array;
@@ -57,7 +57,7 @@ export class Compressor {
             if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
             const photo=input.slice(0,before.videoStart);if(mpfPictures(photo).pictures.at(-1)!.end!==photo.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');requireHdrMetadataWriter(photo);
             if(await this.engine.run('hdr-probe',{input:photo})!==1)throw new ProtectedMedia('HDR full decode failed');
-            const rebuilt=await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
+            const rebuilt=retainHdrComments(photo,await this.engine.run('hdr-reencode',{input:photo,quality:Number(c['compression.jpegQuality'])})as Uint8Array);
             verifyHdrMetadata(photo,rebuilt);
             if(await this.engine.run('hdr-probe',{input:rebuilt})!==1)throw new Error('Rebuilt HDR failed full decode');
             bytes=addMotionToHdr(rebuilt,output,before.timestamp);
@@ -85,7 +85,7 @@ export class Compressor {
           if(c['compression.resizeImage']||!c['compression.preserveExif']||!c['compression.preserveGps'])throw new ProtectedMedia('HDR resize/privacy metadata writer not verified');
           if(mpfPictures(input).pictures.at(-1)!.end!==input.length)throw new ProtectedMedia('Unclassified HDR trailing bytes');requireHdrMetadataWriter(input);
           if(await this.engine.run('hdr-probe',{input})!==1)throw new ProtectedMedia('HDR full decode failed');
-          bytes=await this.engine.run('hdr-reencode',{input,quality:Number(c['compression.jpegQuality'])})as Uint8Array;
+          bytes=retainHdrComments(input,await this.engine.run('hdr-reencode',{input,quality:Number(c['compression.jpegQuality'])})as Uint8Array);
           verifyHdrMetadata(input,bytes);
           mpfPictures(bytes);if(await this.engine.run('hdr-probe',{input:bytes})!==1)throw new Error('Reconstructed HDR full decode failed');
         }else if(before.format==='jpeg'){
@@ -143,7 +143,9 @@ export class Compressor {
       if(after.format!==before.format||after.live!==before.live||after.hdr!==before.hdr)throw new Error('Output capability changed');
       if(!c['compression.resizeImage']&&(before.width!==after.width||before.height!==after.height))throw new Error('Image dimensions changed');
       if(!intermediate&&((1-bytes.length/input.length)*100<Number(c['compression.minSavingPercent'])||bytes.length>=input.length))throw new ProtectedMedia('Result does not meet minimum savings');
-      return {bytes,before,after,backend:c['compression.backend']==='native'?'native':'wasm',warnings};
+      const hdrRoute=before.hdr&&(!before.live||c['compression.liveMode']!=='video-only');
+      const backendName=hdrRoute?(before.live&&c['compression.backend']==='native'?'native-video+wasm-hdr':'wasm-hdr'):c['compression.backend']==='native'?'native':'wasm';
+      return {bytes,before,after,backend:backendName,warnings};
     }finally{signal.removeEventListener('abort',cancel);}
   }
   async encodeApple(photo:Uint8Array,movie:Uint8Array,c:Config,signal:AbortSignal):Promise<{photo:Uint8Array;movie:Uint8Array}>{

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {ascii,equal,jpegSegments} from './bytes';
+import {ascii,equal,jpegSegments,concat} from './bytes';
 import {mpfPictures} from './hdr';
 import {xmpTags,namespaces} from './xmp';
 const rebuiltNamespaces=new Set([
@@ -11,7 +11,7 @@ const rebuiltNamespaces=new Set([
 export function requireHdrMetadataWriter(input:Uint8Array):void{
   for(const picture of mpfPictures(input).pictures)for(const segment of jpegSegments(input.subarray(picture.start,picture.end))){
     const bytes=input.subarray(picture.start,picture.end),marker=segment.marker;
-    if(marker===0xfe)throw new Error('HDR comment metadata has no verified preservation writer');
+    if(marker===0xfe)continue;
     if(marker<0xe0||marker>0xef||marker===0xe0)continue;
     const payload=ascii(bytes,segment.payload,segment.end-segment.payload);
     if(marker===0xe1&&payload.startsWith('Exif\0\0')){if(picture.start!==0)throw new Error('Gain-map EXIF metadata protected');continue;}
@@ -33,4 +33,29 @@ export function verifyHdrMetadata(before:Uint8Array,after:Uint8Array):void{
     const old=selected(before),next=selected(after);
     if(old.length&&!old.every((bytes,i)=>next[i]&&equal(bytes,next[i]!)))throw new Error('HDR EXIF/ICC metadata preservation failed');
   }
+}
+export function retainHdrComments(before:Uint8Array,after:Uint8Array):Uint8Array{
+  const original=mpfPictures(before),next=mpfPictures(after);
+  const comments=original.pictures.map(p=>{const image=before.subarray(p.start,p.end);return concat(...jpegSegments(image).filter(s=>s.marker===0xfe).map(s=>image.slice(s.start,s.end)));});
+  if(comments.every(b=>!b.length))return after;
+  // Codec comments are replaced with the original comments; the encoder-generated version has no semantic value.
+  const cleaned=next.pictures.map(p=>{const image=after.subarray(p.start,p.end);let at=0;const parts:Uint8Array[]=[];
+    for(const segment of jpegSegments(image).filter(s=>s.marker===0xfe)){parts.push(image.slice(at,segment.start));at=segment.end;}parts.push(image.slice(at));return concat(...parts);});
+  // Rebuild with unchanged MPF origin placement relative to the primary JPEG start.
+  const oldFirstSize=next.pictures[0]!.end,oldSecondSize=next.pictures[1]!.end-next.pictures[1]!.start;
+  const first=concat(cleaned[0]!.slice(0,2),comments[0]!,cleaned[0]!.slice(2)),second=concat(cleaned[1]!.slice(0,2),comments[1]!,cleaned[1]!.slice(2));
+  const output=concat(first,second),firstDelta=first.length-oldFirstSize;
+  // Find the MPF header after insertion; index extents are patched before parsing the new pictures.
+  const segment=jpegSegments(first).find(s=>s.marker===0xe2&&ascii(first,s.payload,4)==='MPF\0')!;
+  const origin=segment.payload+4,little=ascii(first,origin,2)==='II',v=new DataView(output.buffer);
+  const originalIndex=mpfPictures(after);
+  // The primary insertion and removed comments may shift the origin differently from the picture boundary.
+  const originalMpf=jpegSegments(after).find(s=>s.marker===0xe2&&ascii(after,s.payload,4)==='MPF\0')!;
+  const originDelta=origin-(originalMpf.payload+4);
+  const shiftField=(field:number)=>field+originDelta;
+  v.setUint32(shiftField(originalIndex.pictures[0]!.sizeField),first.length,little);
+  v.setUint32(shiftField(originalIndex.pictures[1]!.sizeField),second.length,little);
+  const offsetField=shiftField(originalIndex.pictures[1]!.offsetField);
+  v.setUint32(offsetField,new DataView(after.buffer,after.byteOffset).getUint32(originalIndex.pictures[1]!.offsetField,little)+firstDelta-originDelta,little);
+  if(mpfPictures(output).pictures[1]!.end!==output.length||oldSecondSize<=0)throw new Error('HDR comments index readback failed');return output;
 }

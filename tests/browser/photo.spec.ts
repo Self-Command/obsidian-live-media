@@ -26,6 +26,21 @@ test('photo layer never has controls; auto is muted, repeated clicks stop, drag 
   await page.evaluate(()=>{const t=(window as any).testPhoto;t.photo.destroy();});
   await expect(page.locator('video')).toHaveCount(0);await expect(page.locator('img')).toHaveCount(1);
 });
+test('theme variables update LIVE appearance and repeated mount/unmount releases every photo',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
+  const result=await page.evaluate(()=>{
+    const h=(window as any).liveMediaHarness,c=h.defaults();c['auto.mode']='off';const coord=new h.PlaybackCoordinator(()=>c);let releases=0;
+    const colors=[];
+    for(const color of ['rgb(20, 30, 40)','rgb(230, 235, 240)']){
+      document.documentElement.style.setProperty('--text-normal',color);
+      const box=document.createElement('div');document.body.append(box);const images=[document.createElement('img'),document.createElement('img')];box.append(...images);
+      const photos=images.map(img=>new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>releases++));
+      colors.push(getComputedStyle(box.querySelector('.live-media-badge')!).color);photos.forEach(p=>p.destroy());if(box.style.position!=='')throw new Error('Parent layout not restored');box.remove();
+    }
+    for(let i=0;i<20;i++){const box=document.createElement('div');document.body.append(box);const img=document.createElement('img');box.append(img);const photo=new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>releases++);photo.destroy();box.remove();}
+    return {colors,releases,remaining:coord.photos.size,videos:document.querySelectorAll('video').length};
+  });expect(result).toEqual({colors:['rgb(20, 30, 40)','rgb(230, 235, 240)'],releases:24,remaining:0,videos:0});
+});
 test('long press cancels on release, multi-touch stays native, keyboard and unload preserve host styling',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
   const result=await page.evaluate(async()=>{
