@@ -86,7 +86,7 @@ test('lossless PNG preserves decoded RGBA; animated and unknown resources are pr
 test('sRGB and P3 JPEG compression keeps ICC, compares decoded color and permits untouched-photo motion mode',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
   const results=await page.evaluate(async()=>{
-    const h=(window as any).liveMediaHarness,e=h.engine,c=h.defaults();c['compression.minSavingPercent']=0;c['compression.jpegQuality']=95;
+    const h=(window as any).liveMediaHarness,e=h.engine,c=h.defaults(); // Exercise the user's default JPEG quality and savings gate.
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=384;
     const ctx=canvas.getContext('2d')!;const gradient=ctx.createLinearGradient(0,0,512,384);gradient.addColorStop(0,'#fa4536');gradient.addColorStop(.5,'#24c776');gradient.addColorStop(1,'#315df9');ctx.fillStyle=gradient;ctx.fillRect(0,0,512,384);
     const blob=await new Promise<Blob>(resolve=>canvas.toBlob(b=>resolve(b!),'image/jpeg',1));const jpeg=new Uint8Array(await blob.arrayBuffer());
@@ -99,7 +99,7 @@ test('sRGB and P3 JPEG compression keeps ICC, compares decoded color and permits
     const video=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer());
     ctx.fillStyle='#ff00aa';ctx.fillRect(0,0,512,384);const wrongBlob=await new Promise<Blob>(resolve=>canvas.toBlob(b=>resolve(b!),'image/jpeg',1));const wrong=new Uint8Array(await wrongBlob.arrayBuffer());
     const rawMotion=new Uint8Array(await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer());
-    const input=h.addIcc(rawMotion,h.profile());c['compression.liveMode']='video-only';c['compression.videoQuality']='custom';c['compression.ffmpegCrf']=30;
+    const input=h.addIcc(rawMotion,h.profile());c['compression.liveMode']='video-only';
     const live=await new h.Compressor(e).encode(input,'jpg',c,new AbortController().signal);
     let rejected=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(wrong,h.profile()),new AbortController().signal);}catch(error){rejected=String(error).includes('ICC color comparison failed');}
     let changedProfile=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(jpeg,h.profile('srgb')),new AbortController().signal);}catch{changedProfile=true;}
