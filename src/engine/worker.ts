@@ -35,7 +35,8 @@ scope.onmessage = async (event) => {
     if (op === 'load') {
       if (initialized) throw new Error('Engine already loaded');
       scope.importScripts(data.coreURL as string, data.hdrURL as string);
-      core = await scope.createFFmpegCore({wasmBinary: data.wasm, mainScriptUrlOrBlob: data.coreURL});
+      const locator = btoa(JSON.stringify({wasmURL: 'data:application/wasm;base64,', workerURL: 'data:text/javascript,'}));
+      core = await scope.createFFmpegCore({wasmBinary: data.wasm, mainScriptUrlOrBlob: String(data.coreURL) + '#' + locator});
       core.setLogger(() => {});
       hdr = await scope.createUltraHDR({wasmBinary: data.hdrWasm, noInitialRun: true});
       initialized = true;
