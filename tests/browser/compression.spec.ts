@@ -97,11 +97,11 @@ test('sRGB and P3 JPEG compression keeps ICC, compares decoded color and permits
       await h.validateJpegColor(input,result.bytes,new AbortController().signal);
     }
     const video=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer());
-    const small=await e.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
+    ctx.fillStyle='#ff00aa';ctx.fillRect(0,0,512,384);const wrongBlob=await new Promise<Blob>(resolve=>canvas.toBlob(b=>resolve(b!),'image/jpeg',1));const wrong=new Uint8Array(await wrongBlob.arrayBuffer());
     const rawMotion=new Uint8Array(await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer());
     const input=h.addIcc(rawMotion,h.profile());c['compression.liveMode']='video-only';c['compression.videoQuality']='custom';c['compression.ffmpegCrf']=30;
     const live=await new h.Compressor(e).encode(input,'jpg',c,new AbortController().signal);
-    let rejected=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(small,h.profile()),new AbortController().signal);}catch{rejected=true;}
+    let rejected=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(wrong,h.profile()),new AbortController().signal);}catch(error){rejected=String(error).includes('ICC color comparison failed');}
     let changedProfile=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(jpeg,h.profile('srgb')),new AbortController().signal);}catch{changedProfile=true;}
     const sameProfile=Array.from(h.jpegIcc(input).bytes).join()===Array.from(h.jpegIcc(live.bytes).bytes).join();
     e.destroy();return {output,live:live.after.live,sameProfile,rejected,changedProfile};
