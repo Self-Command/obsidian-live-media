@@ -3,7 +3,7 @@ import {OfflineEngine} from '../engine/client';
 import {probe, type MediaProbe} from '../media/probe';
 import {replaceMotionVideo} from '../media/motion';
 import {validateVideoPreservation,validateCoverTime} from '../media/mp4';
-import {ascii, concat, equal, jpegSegments} from '../media/bytes';
+import {ascii, concat, equal, jpegSegments,u32} from '../media/bytes';
 import type {Config} from '../settings/model';
 import {exifOrientation,minimalExif,scrubGpsSegment,applePhotoId} from '../media/exif';
 import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
@@ -122,6 +122,10 @@ export class Compressor {
           const newPixels=await backend.encode(bytes,'png',rawArgs,'raw');
           if(!equal(originalPixels,newPixels))throw new ProtectedMedia('PNG pixel/alpha mismatch');
           if(input[24]!==8)throw new ProtectedMedia('Only validated 8-bit PNG path');
+          const metadataNames=['pHYs','tEXt','zTXt','iTXt','tIME'];
+          const chunks=(b:Uint8Array)=>{const result:Array<{name:string;bytes:Uint8Array}>=[];for(let at=8;at+12<=b.length;){const length=u32(b,at)+12;result.push({name:ascii(b,at+4,4),bytes:b.slice(at,at+length)});at+=length;}return result;};
+          const encodedChunks=chunks(bytes),saved=chunks(input).filter(c=>metadataNames.includes(c.name)).map(c=>c.bytes);
+          bytes=concat(bytes.slice(0,8),...encodedChunks.flatMap(chunk=>chunk.name==='IEND'?[...saved,chunk.bytes]:metadataNames.includes(chunk.name)?[]:[chunk.bytes]));
         }else if(before.format==='webp'){
           if(c['compression.resizeImage'])throw new ProtectedMedia('WebP resize is not verified');
           const lossless=c['compression.staticStrategy']==='lossless-first'||c['compression.preset']==='lossless'||!c['compression.allowLossy'];

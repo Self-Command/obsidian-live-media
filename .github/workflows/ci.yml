@@ -100,5 +100,10 @@ jobs:
           cp codecs/BUILDING.md candidate/CODEC-BUILDING.md
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
+          name: synthetic-fixtures-${{ github.sha }}
+          path: dist/fixtures/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
           name: candidate-${{ github.sha }}
           path: candidate/

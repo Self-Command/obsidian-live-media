@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {ascii,boxes,children,u32,equal,type Box} from './bytes';
+import {ascii,boxes,children,child,u32,equal,type Box} from './bytes';
 import {applePhotoId} from './exif';
 import {tracks,validateVideoPreservation} from './mp4';
 export function quickTimeMetadata(b:Uint8Array):Map<string,Uint8Array>{
@@ -31,9 +31,23 @@ export function appleVideoId(b:Uint8Array):string|undefined {
 }
 export function trustedApplePair(photo:Uint8Array,movie:Uint8Array):boolean {
   const id=applePhotoId(photo);if(!id||id!==appleVideoId(movie))return false;
-  const ts=tracks(movie);
-  // Both the keyed timed-metadata track and its actual sample are required.
-  return ts.some(t=>['meta','mdta'].includes(t.kind)&&t.samples.length>0&&t.sampleEntry==='mebx')&&ascii(movie).includes('com.apple.quicktime.still-image-time');
+  const ts=tracks(movie),moov=boxes(movie).find(b=>b.type==='moov')!;
+  const traks=children(movie,moov).filter(b=>b.type==='trak');
+  for(let i=0;i<ts.length;i++){
+    const track=ts[i]!;if(!['meta','mdta'].includes(track.kind)||track.sampleEntry!=='mebx')continue;
+    const stsd=child(movie,child(movie,child(movie,child(movie,traks[i]!,'mdia'),'minf'),'stbl'),'stsd');
+    const entry=boxes(movie,stsd.payload+8,stsd.end)[0]!;
+    const keys=boxes(movie,entry.payload+8,entry.end).find(b=>b.type==='keys');if(!keys)continue;
+    for(const key of children(movie,keys)){
+      const local=u32(movie,key.start+4);if(local===0||local===0xffffffff)continue;
+      const fields=children(movie,key),declaration=fields.find(b=>b.type==='keyd'),datatype=fields.find(b=>b.type==='dtyp');
+      if(!declaration||ascii(movie,declaration.payload,4)!=='mdta'||ascii(movie,declaration.payload+4,declaration.end-declaration.payload-4)!=='com.apple.quicktime.still-image-time')continue;
+      // Apple's fixed-size signed-byte timed metadata. Do not trust a string found elsewhere.
+      if(!datatype||datatype.end-datatype.payload!==8||u32(movie,datatype.payload)!==0||u32(movie,datatype.payload+4)!==65)continue;
+      for(const sample of track.samples)for(const atom of boxes(sample))
+        if(u32(sample,atom.start+4)===local&&atom.end-atom.payload===1&&[0,255].includes(sample[atom.payload]!))return true;
+    }
+  }return false;
 }
 export async function validateAppleMovie(before:Uint8Array,after:Uint8Array):Promise<void>{
   await validateVideoPreservation(before,after,false,true);

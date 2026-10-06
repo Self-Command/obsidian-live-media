@@ -28,9 +28,10 @@ export class ReferenceIndex {
     const switches=c['detect.providers'] as Record<string,unknown>;
     for(const provider of this.providers.values())if(switches[provider.id]!==false){
       if(signal.aborted)throw new Error('Cancelled');
-      try{const values=await Promise.race([provider.references(file.path,signal),new Promise<never>((_,reject)=>setTimeout(()=>reject(new Error('Provider timeout')),3000))]);
+      let timeout:ReturnType<typeof setTimeout>|undefined;
+      try{const values=await Promise.race([provider.references(file.path,signal),new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Provider timeout')),3000);})]);
         for(const value of values.slice(0,10000))if(value.source===file.path&&typeof value.link==='string'&&['direct','dynamic','candidate','unresolved'].includes(value.evidence))refs.push(value);
-      }catch{/* provider failure cannot abort other references */}
+      }catch{/* provider failure cannot abort other references */}finally{clearTimeout(timeout);}
     }
     return mergeReferences(refs.map(ref=>this.resolve(ref)));
   }

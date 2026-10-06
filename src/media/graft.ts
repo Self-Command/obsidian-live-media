@@ -28,7 +28,7 @@ export function graftAppleVideo(original:Uint8Array,encoded:Uint8Array):Uint8Arr
     const mdia=child(data,trak,'mdia'),minf=child(data,mdia,'minf'),stbl=child(data,minf,'stbl');
     const originalStsc=child(data,stbl,'stsc');
     for(let row=0,n=u32(data,originalStsc.payload+4);row<n;row++)if(u32(data,originalStsc.payload+16+12*row)!==1)throw new Error('Multiple sample description mapping protected');
-    const tableParts=children(data,stbl).filter(v=>!['stco','co64','stsc'].includes(v.type)).map(v=>data.slice(v.start,v.end));
+    const tableParts:Uint8Array[]=children(data,stbl).filter(v=>!['stco','co64','stsc'].includes(v.type)).map(v=>data.slice(v.start,v.end));
     tableParts.push(fullTable('stsc',[1,1,samples.length,1]),fullTable('stco',[1,offset]));
     const newStbl=box('stbl',concat(...tableParts)),newMinf=rebuild(data,minf,new Map([['stbl',newStbl]]));
     const newMdia=rebuild(data,mdia,new Map([['minf',newMinf]]));

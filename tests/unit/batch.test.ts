@@ -37,3 +37,8 @@ it('blocks reentry and honours cancellation while preparing',async()=>{
   const task=m.batch.prepare([i.path],defaults());await vi.waitFor(()=>expect(m.compressor.encode).toHaveBeenCalled());
   await expect(m.batch.prepare([i.path],defaults())).rejects.toThrow('Batch already active');m.batch.cancel();resolve(i.encoded);await task;expect(m.batch.busy).toBe(false);expect(m.files.get(i.path)).toEqual(i.input);
 });
+it('skips a verified existing copy before encoding the same input and settings again',async()=>{
+  const m=memory(),i=await item();i.path='photo.png';m.files.set(i.path,i.input);const c=defaults();
+  i.settingsHash=await hash(new TextEncoder().encode(JSON.stringify(c)));await m.batch.commit([i],c);
+  const prepared=await m.batch.prepare([i.path],c);expect(prepared[0]?.reason).toContain('Verified copy already exists');expect(m.compressor.encode).not.toHaveBeenCalled();
+});

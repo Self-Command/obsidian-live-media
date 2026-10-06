@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import {writeFile} from 'node:fs/promises';
 test('real SDR and HDR motion files preserve decode, cover time, audio, frames and index',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
   await page.evaluate(async()=>{Object.assign(window,{audioFixture:new Uint8Array(await (await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer())});});
@@ -32,11 +33,27 @@ test('real SDR and HDR motion files preserve decode, cover time, audio, frames a
     const hdrValid=await e.run('hdr-probe',{input:hdrOutput.bytes.slice(0,hdrAfter.videoStart)});
     await h.validateVideoPreservation(video,compressed.bytes.slice(p.videoStart));
     const sourceTracks=h.tracks(video),outputTracks=h.tracks(compressed.bytes.slice(p.videoStart));
-    e.destroy();return {sdrModes,live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
+    e.destroy();return {fixture:Array.from(motion),sdrModes,live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
   });
   expect(result.live).toBe(true);expect(result.time).toBe('500000');expect(result.smaller).toBe(true);
   expect(result.sdrModes).toEqual([true,true]);
   expect(result.hdr).toBe(true);expect(result.hdrValid).toBe(1);expect(result.hdrTime).toBe('500000');expect(result.frames).toBe(32);expect(result.audio).toBe(true);expect(result.hdrPictures).toBe(2);
+  await writeFile('dist/fixtures/motion.jpg',new Uint8Array(result.fixture));
+});
+
+test('independent Apple graft keeps keyed timed samples, identity, original photo and audio',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,e=h.engine,video=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer());
+    const jpg=await e.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
+    const pair=h.appleFixture(jpg,video);if(!h.trustedApplePair(pair.photo,pair.movie))throw new Error('Synthetic structural Apple pair rejected');
+    const c=h.defaults();c['compression.minSavingPercent']=0;c['compression.videoQuality']='custom';c['compression.ffmpegCrf']=30;
+    const output=await new h.Compressor(e).encodeApple(pair.photo,pair.movie,c,new AbortController().signal);
+    await h.validateAppleMovie(pair.movie,output.movie);await e.validate(output.movie);
+    const old=h.tracks(pair.movie),next=h.tracks(output.movie);e.destroy();
+    return {trusted:h.trustedApplePair(output.photo,output.movie),photoEqual:Array.from(output.photo).join(',')===Array.from(pair.photo).join(','),tracks:next.length,metaEqual:Array.from(old[2].samples[0]).join(',')===Array.from(next[2].samples[0]).join(','),smaller:output.movie.length<pair.movie.length};
+  });
+  expect(result).toEqual({trusted:true,photoEqual:true,tracks:3,metaEqual:true,smaller:true});
 });
 test('VFR frame timestamps remain exact or protectively reject without any write',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});

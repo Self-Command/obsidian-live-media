@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import type {Config} from '../settings/model';
+const parentPositions=new WeakMap<HTMLElement,{position:string;count:number}>();
 export class PlaybackCoordinator {
   photos=new Set<Photo>();
   constructor(private settings:()=>Config){}
@@ -20,16 +21,18 @@ export class Photo {
   private abort=new AbortController(); private timers=new Set<ReturnType<typeof setTimeout>>();
   private observer:IntersectionObserver; private resize:ResizeObserver;
   private video:HTMLVideoElement;private badge:HTMLSpanElement;private layer:HTMLSpanElement;
-  private ratio=0;private pointer?:{x:number;y:number;type:string;at:number};private moved=false;
+  private ratio=0;private pointer?:{x:number;y:number;type:string;at:number;id:number};private moved=false;
   private entered=false;private loops=0;private stoppedAt=0;private position=0;
   private tabIndex:string|null;private aria:string|null;private role:string|null;
-  private parentPosition:string;private imageOpacity:string;
+  private imageOpacity:string;private parent:HTMLElement;
+  private longPress?:ReturnType<typeof setTimeout>;private playGeneration=0;
   private firedLongPress=false;
   constructor(private img:HTMLImageElement,private url:string,private config:()=>Config,private coordinator:PlaybackCoordinator,
     private previewed:()=>boolean,private remember:()=>void,private notice:(message:string)=>void,private release:()=>void,
     private host:'reading'|'preview'='reading') {
     const parent=img.parentElement;if(!parent)throw new Error('Detached image');
-    this.parentPosition=parent.style.position;this.imageOpacity=img.style.opacity;
+    this.parent=parent;this.imageOpacity=img.style.opacity;
+    const parentState=parentPositions.get(parent)??{position:parent.style.position,count:0};parentState.count++;parentPositions.set(parent,parentState);
     if(getComputedStyle(parent).position==='static')parent.style.position='relative';
     const doc=img.ownerDocument;
     this.layer=doc.createElement('span');this.layer.className='live-media-photo-layer';
@@ -41,18 +44,22 @@ export class Photo {
     this.tabIndex=img.getAttribute('tabindex');this.aria=img.getAttribute('aria-label');this.role=img.getAttribute('role');
     const listen=<K extends keyof HTMLElementEventMap>(target:HTMLElement,name:K,fn:(e:HTMLElementEventMap[K])=>void,capture=false)=>target.addEventListener(name,fn as EventListener,{signal:this.abort.signal,capture});
     listen(img,'pointerdown',e=>{
-      this.pointer={x:e.clientX,y:e.clientY,type:e.pointerType,at:Date.now()};this.moved=false;this.firedLongPress=false;
-      if(this.config()['manual.gesture']==='long-press')this.schedule(()=>{if(!this.moved&&this.pointer){this.firedLongPress=true;this.action();}},Number(this.config()['gesture.longPressMs']));
+      if(!e.isPrimary&&e.pointerType==='touch'||e.button!==0){this.moved=true;this.clearLongPress();return;}
+      if(this.pointer&&this.pointer.id!==e.pointerId){this.moved=true;this.clearLongPress();return;}
+      this.pointer={x:e.clientX,y:e.clientY,type:e.pointerType,at:Date.now(),id:e.pointerId};this.moved=false;this.firedLongPress=false;
+      if(this.config()['manual.gesture']==='long-press')this.longPress=this.schedule(()=>{if(!this.moved&&this.pointer){this.firedLongPress=true;this.action();}},Number(this.config()['gesture.longPressMs']));
     });
     listen(img,'pointermove',e=>{if(this.pointer){const tolerance=Number(this.config()[this.pointer.type==='touch'?'gesture.touchTolerancePx':'gesture.mouseTolerancePx']);
-      if(Math.hypot(e.clientX-this.pointer.x,e.clientY-this.pointer.y)>tolerance)this.moved=true;}});
-    listen(img,'pointercancel',()=>{this.moved=true;this.pointer=undefined;});
-    listen(img,'dragstart',()=>{this.moved=true;});
+      if(Math.hypot(e.clientX-this.pointer.x,e.clientY-this.pointer.y)>tolerance){this.moved=true;this.clearLongPress();}}});
+    listen(img,'pointercancel',()=>{this.moved=true;this.pointer=undefined;this.clearLongPress();});
+    listen(img,'dragstart',()=>{this.moved=true;this.clearLongPress();});
     listen(img,'click',e=>this.click(e),true);
     listen(img,'dblclick',e=>{if(this.config()['manual.gesture']==='double-click'&&!this.moved&&!this.passthrough(e)){e.preventDefault();e.stopImmediatePropagation();this.action();}},true);
     // A window capture listener runs before document-level image viewers. It is strictly
     // scoped to this verified image; ordinary images, menus and captions keep host behavior.
     const win=doc.defaultView;
+    win?.addEventListener('pointerup',()=>{this.clearLongPress();this.pointer=undefined;},{capture:true,signal:this.abort.signal});
+    win?.addEventListener('pointercancel',()=>{this.clearLongPress();this.pointer=undefined;this.moved=true;},{capture:true,signal:this.abort.signal});
     win?.addEventListener('click',e=>{
       if(e.target!==img||this.moved||this.passthrough(e))return;
       const c=this.config();if(c['host.clickPriority']==='live'&&c['manual.gesture']==='double-click'&&c['manual.enabled']){
@@ -77,7 +84,8 @@ export class Photo {
     this.observer.observe(img);this.resize=new ResizeObserver(()=>this.layout());this.resize.observe(img);
     listen(img,'load',()=>this.layout());this.coordinator.photos.add(this);this.refresh();this.layout();
   }
-  private schedule(fn:()=>void,ms:number):void {const timer=setTimeout(()=>{this.timers.delete(timer);if(!this.abort.signal.aborted)fn();},ms);this.timers.add(timer);}
+  private schedule(fn:()=>void,ms:number):ReturnType<typeof setTimeout> {const timer=setTimeout(()=>{this.timers.delete(timer);if(!this.abort.signal.aborted)fn();},ms);this.timers.add(timer);return timer;}
+  private clearLongPress():void {if(this.longPress!==undefined){clearTimeout(this.longPress);this.timers.delete(this.longPress);this.longPress=undefined;}}
   private layout():void {const r=this.img.getBoundingClientRect(),p=this.img.parentElement!.getBoundingClientRect();Object.assign(this.layer.style,{left:(r.left-p.left)+'px',top:(r.top-p.top)+'px',width:r.width+'px',height:r.height+'px'});}
   refresh():void {
     const c=this.config();const reduced=!!c['accessibility.respectReducedMotion']&&matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -102,7 +110,7 @@ export class Photo {
   private passthrough(e:MouseEvent):boolean {return this.modifier(e,String(this.config()['host.passthroughModifier']))||e.button!==0;}
   private click(e:MouseEvent):void {
     const c=this.config();if(!c['manual.enabled']||this.moved||this.passthrough(e))return;
-    const gesture=c['manual.gesture'];
+    const gesture=c['manual.gesture'];if(c['host.clickPriority']==='viewer'&&gesture==='click')return;
     const applies=gesture==='click'||(gesture==='modified-click'&&this.modifier(e,String(c['gesture.modifier'])))||(gesture==='long-press'&&this.firedLongPress);
     if(!applies)return;
     e.preventDefault();e.stopImmediatePropagation();if(!this.firedLongPress)this.action();this.pointer=undefined;
@@ -124,6 +132,7 @@ export class Photo {
       if(!c['auto.mobile']&&matchMedia('(pointer: coarse)').matches)return;
     }
     if(!this.coordinator.admit(this,manual))return;
+    const generation=++this.playGeneration;
     this.manual=manual;this.playing=true;this.loops=0;
     this.video.currentTime=manual&&c['manual.resume']==='resume'?this.position:0;
     this.video.muted=!manual||!c['manual.sound'];this.video.volume=Number(c['manual.volumePercent'])/100;
@@ -131,27 +140,29 @@ export class Photo {
       // Called before the first await so preloaded media retains genuine click activation.
       await this.video.play();
     }catch{
+      if(generation!==this.playGeneration)return;
       if(!manual){this.stop();return;}
       this.video.muted=true;
       try{await this.video.play();this.notice('Sound was blocked; playing muted. Click again after stopping to allow sound.');}
-      catch{this.stop();this.notice('Playback was blocked by this WebView');return;}
+      catch{if(generation===this.playGeneration){this.stop();this.notice('Playback was blocked by this WebView');}return;}
     }
-    if(!this.playing)return;
+    if(!this.playing||generation!==this.playGeneration)return;
     const show=()=>{if(this.playing){this.video.style.opacity='1';this.layer.classList.add('is-playing');}};
     if('requestVideoFrameCallback'in this.video)this.video.requestVideoFrameCallback(show);else this.img.ownerDocument.defaultView?.requestAnimationFrame(show);
-    if(!manual){this.remember();if(c['auto.durationMs']!=='full')this.schedule(()=>{if(!this.manual)this.stop();},Number(c['auto.durationMs']));}
+    if(!manual){this.remember();if(c['auto.durationMs']!=='full')this.schedule(()=>{if(generation===this.playGeneration&&!this.manual)this.finishAutomatic();},Number(c['auto.durationMs']));}
   }
+  private finishAutomatic():void {this.stop();const c=this.config();if(c['auto.mode']==='visible-loop')this.schedule(()=>{if(!this.playing&&this.ratio>=Number(this.config()['auto.enterRatio']))void this.play(false);},Number(c['auto.cooldownMs']));}
   private ended():void {
     this.loops++;const c=this.config();const count=this.manual?c['manual.loopCount']:c['auto.loopCount'];
-    if(count==='continuous'||this.loops<Number(count)||(!this.manual&&c['auto.mode']==='visible-loop'&&this.ratio>=Number(c['auto.enterRatio']))){
+    if(count==='continuous'||this.loops<Number(count)){
       this.video.currentTime=0;if(!this.manual)this.video.muted=true;void this.video.play().catch(()=>this.stop());
-    }else this.stop();
+    }else if(this.manual)this.stop();else this.finishAutomatic();
   }
-  stop():void {this.position=this.video.currentTime;this.video.pause();this.video.muted=true;this.playing=false;this.manual=false;
+  stop():void {this.playGeneration++;this.position=this.video.currentTime;this.video.pause();this.video.muted=true;this.playing=false;this.manual=false;
     this.video.style.opacity='0';this.img.style.opacity=this.imageOpacity;this.layer.classList.remove('is-playing');this.stoppedAt=Date.now();}
   destroy():void {if(this.abort.signal.aborted)return;this.stop();this.abort.abort();for(const t of this.timers)clearTimeout(t);this.timers.clear();
     this.observer.disconnect();this.resize.disconnect();this.video.removeAttribute('src');this.video.load();this.layer.remove();
     this.restoreAttribute('tabindex',this.tabIndex);this.restoreAttribute('aria-label',this.aria);this.restoreAttribute('role',this.role);
-    if(this.img.parentElement&&!this.img.parentElement.querySelector('.live-media-photo-layer'))this.img.parentElement.style.position=this.parentPosition;
+    const parentState=parentPositions.get(this.parent);if(parentState&&--parentState.count===0){this.parent.style.position=parentState.position;parentPositions.delete(this.parent);}
     this.coordinator.photos.delete(this);this.release();}
 }

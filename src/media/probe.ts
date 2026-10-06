@@ -13,10 +13,12 @@ export function probe(b: Uint8Array): MediaProbe {
       result.format='jpeg'; const segs=jpegSegments(b);
       const eoi=segs.find(s=>s.marker===0xd9)!.end;
       const frame=segs.find(s=>[0xc0,0xc1,0xc2].includes(s.marker));
-      if(frame){result.height=u16(b,frame.payload+1);result.width=u16(b,frame.payload+3);}
+      if(frame){result.height=u16(b,frame.payload+1);result.width=u16(b,frame.payload+3);
+        if(b[frame.payload]!==8||![1,3].includes(b[frame.payload+5]!))result.protected.push('Unverified JPEG precision or color components');}
       const xmps=segs.filter(s=>s.marker===0xe1&&ascii(b,s.payload,29).startsWith('http://ns.adobe.com/xap/1.0/'));
       const all=segs.filter(s=>s.marker>=0xe0&&s.marker<=0xef).map(s=>ascii(b,s.payload,s.end-s.payload)).join('');
       result.hdr=/hdrgm:|hdr-gain-map|urn:iso:std:iso:ts:21496|HDRGainMap/.test(all)||segs.some(s=>s.marker===0xe2&&ascii(b,s.payload,4)==='MPF\0');
+      if(!result.hdr&&segs.some(s=>s.marker===0xe2&&ascii(b,s.payload,11)==='ICC_PROFILE'))result.protected.push('ICC JPEG reencode is not color-validated');
       for(const s of xmps){
         const xml=ascii(b,s.payload+29,s.end-s.payload-29);
         const tags=xmpTags(xml),ns=namespaces(tags);
@@ -59,7 +61,8 @@ export function probe(b: Uint8Array): MediaProbe {
       while(p+12<=b.length){const n=u32(b,p),name=ascii(b,p+4,4);if(p+n+12>b.length)throw new Error('Truncated PNG');
         if(name==='acTL')result.protected.push('Animated PNG');
         if(['iCCP','cICP','mDCv','cLLi'].includes(name)){result.protected.push('Color-managed PNG');result.hdr=true;}
-        if(name==='IEND'){hasEnd=true;break;}p+=n+12;}
+        if(!['IHDR','PLTE','IDAT','IEND','tRNS','pHYs','tEXt','zTXt','iTXt','tIME'].includes(name))result.protected.push('PNG ancillary chunk requires a verified preservation writer: '+name);
+        if(name==='IEND'){hasEnd=true;if(p+n+12!==b.length)result.protected.push('PNG trailing data');break;}p+=n+12;}
       if(!hasEnd)throw new Error('Missing PNG IEND');
     } else if(ascii(b,0,4)==='RIFF'&&ascii(b,8,4)==='WEBP'){
       result.format='webp'; result.capability='static';

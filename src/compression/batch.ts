@@ -40,7 +40,12 @@ export class BatchService {
           const free=await this.store.availableBytes?.();
           if(free!==undefined&&free<item.input.length*4+Number(config['storage.diskReserveMiB'])*1048576)throw new ProtectedMedia('Insufficient free space reserve');
           const history=await this.findHistory(path,config);
-          if(config['compression.repeated']==='skip-owned'&&history.some(j=>j.state==='committed'&&j.outputHash===item.fingerprint))throw new ProtectedMedia('Previously compressed by Live Media');
+          if(config['compression.repeated']==='skip-owned')for(const j of history){
+            if(j.state!=='committed')continue;
+            if(j.outputHash===item.fingerprint)throw new ProtectedMedia('Previously compressed by Live Media');
+            if(j.output==='copy'&&j.originalHash===item.fingerprint&&j.settingsHash===settingsHash&&await this.store.exists(j.target)&&await hash(await this.store.read(j.target))===j.outputHash)
+              throw new ProtectedMedia('Verified copy already exists for this input and settings');
+          }
           let apple:string|undefined;
           if(/\.jpe?g$/i.test(path))apple=applePhotoId(item.input);
           if(apple){
