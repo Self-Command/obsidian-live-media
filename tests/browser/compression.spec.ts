@@ -82,3 +82,30 @@ test('lossless PNG preserves decoded RGBA; animated and unknown resources are pr
   expect(r.format).toBe('png');expect(r.saving).toBe(true);expect(r.rejected).toBe(true);
   expect(r.alpha).toBeGreaterThan(0);expect(r.alpha).toBeLessThan(255);
 });
+
+test('sRGB and P3 JPEG compression keeps ICC, compares decoded color and permits untouched-photo motion mode',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const results=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,e=h.engine,c=h.defaults();c['compression.minSavingPercent']=0;c['compression.jpegQuality']=95;
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=384;
+    const ctx=canvas.getContext('2d')!;const gradient=ctx.createLinearGradient(0,0,512,384);gradient.addColorStop(0,'#fa4536');gradient.addColorStop(.5,'#24c776');gradient.addColorStop(1,'#315df9');ctx.fillStyle=gradient;ctx.fillRect(0,0,512,384);
+    const blob=await new Promise<Blob>(resolve=>canvas.toBlob(b=>resolve(b!),'image/jpeg',1));const jpeg=new Uint8Array(await blob.arrayBuffer());
+    const output=[];
+    for(const gamut of ['srgb','display-p3']){
+      const input=h.addIcc(jpeg,h.profile(gamut)),result=await new h.Compressor(e).encode(input,'jpg',c,new AbortController().signal);
+      output.push({gamut:result.after.icc,smaller:result.bytes.length<input.length,profileSame:Array.from(h.jpegIcc(input).bytes).join()===Array.from(h.jpegIcc(result.bytes).bytes).join(),colorVerified:result.warnings.some((v:string)=>v.includes('color comparison passed'))});
+      await h.validateJpegColor(input,result.bytes,new AbortController().signal);
+    }
+    const video=new Uint8Array(await(await fetch('/dist/fixtures/audio-motion.mp4')).arrayBuffer());
+    const small=await e.encode(new Uint8Array(),'jpg',['-f','lavfi','-i','testsrc2=s=128x128:r=1','-frames:v','1','-q:v','1','$OUTPUT']);
+    const rawMotion=new Uint8Array(await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer());
+    const input=h.addIcc(rawMotion,h.profile());c['compression.liveMode']='video-only';c['compression.videoQuality']='custom';c['compression.ffmpegCrf']=30;
+    const live=await new h.Compressor(e).encode(input,'jpg',c,new AbortController().signal);
+    let rejected=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(small,h.profile()),new AbortController().signal);}catch{rejected=true;}
+    let changedProfile=false;try{await h.validateJpegColor(h.addIcc(jpeg,h.profile()),h.addIcc(jpeg,h.profile('srgb')),new AbortController().signal);}catch{changedProfile=true;}
+    const sameProfile=Array.from(h.jpegIcc(input).bytes).join()===Array.from(h.jpegIcc(live.bytes).bytes).join();
+    e.destroy();return {output,live:live.after.live,sameProfile,rejected,changedProfile};
+  });
+  expect(results.output).toEqual([{gamut:'srgb',smaller:true,profileSame:true,colorVerified:true},{gamut:'display-p3',smaller:true,profileSame:true,colorVerified:true}]);
+  expect(results.live).toBe(true);expect(results.sameProfile).toBe(true);expect(results.rejected).toBe(true);expect(results.changedProfile).toBe(true);
+});

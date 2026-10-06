@@ -87,3 +87,27 @@ test('long press cancels on release, multi-touch stays native, keyboard and unlo
   });
   expect(result).toEqual({early:false,multi:false,keyboard:true,stopped:true,position:'',role:null,layers:0});
 });
+
+test('press-time image viewer cannot consume live click; modifier and ordinary photos retain viewer behavior',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  await page.addStyleTag({url:'/dist/styles.css'});
+  await page.evaluate(()=>{
+    const h=(window as any).liveMediaHarness,c=h.defaults();c['auto.mode']='off';
+    const figure=document.createElement('figure'),img=document.createElement('img');img.id='live';img.width=128;img.height=128;img.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"></svg>';figure.append(img);document.body.append(figure);
+    const ordinary=img.cloneNode()as HTMLImageElement;ordinary.id='ordinary';document.body.append(ordinary);
+    const state={opened:0,photo:null as any};
+    // Register BEFORE Photo, at the document capture phase, as a press-driven host.
+    document.addEventListener('mousedown',()=>{state.opened++;},{capture:true});
+    document.addEventListener('pointerdown',()=>{state.opened++;},{capture:true});
+    const coord=new h.PlaybackCoordinator(()=>c),photo=new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>{});
+    const video=figure.querySelector('video')!;video.removeAttribute('src');video.play=async()=>{};video.pause=()=>{};
+    state.photo=photo;Object.assign(window,{pressHost:state});
+  });
+  await page.locator('#live').click();expect(await page.evaluate(()=>(window as any).pressHost.opened)).toBe(0);
+  expect(await page.evaluate(()=>(window as any).pressHost.photo.playing)).toBe(true);
+  await page.locator('#live').click();expect(await page.evaluate(()=>(window as any).pressHost.photo.playing)).toBe(false);
+  await page.locator('#live').click({modifiers:['Alt']});expect(await page.evaluate(()=>(window as any).pressHost.opened)).toBe(2);
+  await page.locator('#ordinary').click();expect(await page.evaluate(()=>(window as any).pressHost.opened)).toBe(4);
+  await page.evaluate(()=>(window as any).pressHost.photo.destroy());
+  await page.locator('#live').click();expect(await page.evaluate(()=>(window as any).pressHost.opened)).toBe(6);
+});

@@ -43,21 +43,35 @@ export class Photo {
     this.layer.append(this.video,this.badge);parent.append(this.layer);
     this.tabIndex=img.getAttribute('tabindex');this.aria=img.getAttribute('aria-label');this.role=img.getAttribute('role');
     const listen=<K extends keyof HTMLElementEventMap>(target:HTMLElement,name:K,fn:(e:HTMLElementEventMap[K])=>void,capture=false)=>target.addEventListener(name,fn as EventListener,{signal:this.abort.signal,capture});
-    listen(img,'pointerdown',e=>{
+    const pointerDown=(e:PointerEvent)=>{
       if(!e.isPrimary&&e.pointerType==='touch'||e.button!==0){this.moved=true;this.clearLongPress();return;}
       if(this.pointer&&this.pointer.id!==e.pointerId){this.moved=true;this.clearLongPress();return;}
       this.pointer={x:e.clientX,y:e.clientY,type:e.pointerType,at:Date.now(),id:e.pointerId};this.moved=false;this.firedLongPress=false;
       if(this.config()['manual.gesture']==='long-press')this.longPress=this.schedule(()=>{if(!this.moved&&this.pointer){this.firedLongPress=true;this.action();}},Number(this.config()['gesture.longPressMs']));
-    });
+    };
     listen(img,'pointermove',e=>{if(this.pointer){const tolerance=Number(this.config()[this.pointer.type==='touch'?'gesture.touchTolerancePx':'gesture.mouseTolerancePx']);
       if(Math.hypot(e.clientX-this.pointer.x,e.clientY-this.pointer.y)>tolerance){this.moved=true;this.clearLongPress();}}});
     listen(img,'pointercancel',()=>{this.moved=true;this.pointer=undefined;this.clearLongPress();});
     listen(img,'dragstart',()=>{this.moved=true;this.clearLongPress();});
     listen(img,'click',e=>this.click(e),true);
     listen(img,'dblclick',e=>{if(this.config()['manual.gesture']==='double-click'&&!this.moved&&!this.passthrough(e)){e.preventDefault();e.stopImmediatePropagation();this.action();}},true);
-    // A window capture listener runs before document-level image viewers. It is strictly
-    // scoped to this verified image; ordinary images, menus and captions keep host behavior.
+    // Capture the initial press as well as click: editor image viewers can open on
+    // mousedown, detach the thumbnail, and consume click before target listeners run.
+    // Do not prevent the native default, so dragging, focus, and selection survive.
     const win=doc.defaultView;
+    const ownsPress=(e:MouseEvent)=>{
+      const c=this.config();if(!c['manual.enabled']||this.passthrough(e))return false;
+      const gesture=c['manual.gesture'];
+      return c['host.clickPriority']==='live'||gesture==='long-press'||
+        (gesture==='modified-click'&&this.modifier(e,String(c['gesture.modifier'])));
+    };
+    win?.addEventListener('pointerdown',e=>{
+      if(e.target!==img)return;pointerDown(e);
+      if(ownsPress(e))e.stopImmediatePropagation();
+    },{capture:true,signal:this.abort.signal});
+    win?.addEventListener('mousedown',e=>{
+      if(e.target===img&&ownsPress(e))e.stopImmediatePropagation();
+    },{capture:true,signal:this.abort.signal});
     win?.addEventListener('pointerup',()=>{this.clearLongPress();this.pointer=undefined;},{capture:true,signal:this.abort.signal});
     win?.addEventListener('pointercancel',()=>{this.clearLongPress();this.pointer=undefined;this.moved=true;},{capture:true,signal:this.abort.signal});
     win?.addEventListener('click',e=>{

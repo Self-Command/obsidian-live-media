@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import {ascii, boxes, jpegSegments, u16, u32, type JpegSegment} from './bytes';
+import {jpegIcc} from './color';
 import {xmpTags,namespaces,attr,cameraNamespace,itemNamespace} from './xmp';
 export interface MediaProbe {
   format: string; live: boolean; hdr: boolean; width?: number; height?: number;
   videoStart?: number; photoEnd?: number; timestamp?: string; xmp?: JpegSegment;
+  icc?: 'srgb'|'display-p3'|'unsupported';
   protected: string[]; capability: 'static' | 'motion' | 'play-only' | 'protected';
 }
 export function probe(b: Uint8Array): MediaProbe {
@@ -18,7 +20,7 @@ export function probe(b: Uint8Array): MediaProbe {
       const xmps=segs.filter(s=>s.marker===0xe1&&ascii(b,s.payload,29).startsWith('http://ns.adobe.com/xap/1.0/'));
       const all=segs.filter(s=>s.marker>=0xe0&&s.marker<=0xef).map(s=>ascii(b,s.payload,s.end-s.payload)).join('');
       result.hdr=/hdrgm:|hdr-gain-map|urn:iso:std:iso:ts:21496|HDRGainMap/.test(all)||segs.some(s=>s.marker===0xe2&&ascii(b,s.payload,4)==='MPF\0');
-      if(!result.hdr&&segs.some(s=>s.marker===0xe2&&ascii(b,s.payload,11)==='ICC_PROFILE'))result.protected.push('ICC JPEG reencode is not color-validated');
+      if(!result.hdr){const icc=jpegIcc(b);if(icc)result.icc=icc.gamut??'unsupported';}
       for(const s of xmps){
         const xml=ascii(b,s.payload+29,s.end-s.payload-29);
         const tags=xmpTags(xml),ns=namespaces(tags);

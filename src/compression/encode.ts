@@ -10,6 +10,7 @@ import {mpfPictures,addMotionToHdr,addMotionToSdr} from '../media/hdr';
 import {xmpTags,namespaces,cameraNamespace,itemNamespace} from '../media/xmp';
 import {trustedApplePair,validateAppleMovie} from '../media/apple';
 import {graftAppleVideo} from '../media/graft';
+import {validateJpegColor} from '../media/color';
 import {requireHdrMetadataWriter,verifyHdrMetadata,retainHdrComments} from '../media/hdr-metadata';
 export interface Encoded {bytes: Uint8Array; before: MediaProbe; after: MediaProbe; backend: string; warnings: string[]}
 export class ProtectedMedia extends Error {}
@@ -95,6 +96,7 @@ export class Compressor {
           if(!Number.isFinite(colorError)||colorError<0||colorError>.1)throw new ProtectedMedia('HDR gamut/dimensions or linear-light relative RMS protection failed: '+colorError);
           mpfPictures(bytes);if(await this.engine.run('hdr-probe',{input:bytes})!==1)throw new Error('Reconstructed HDR full decode failed');
         }else if(before.format==='jpeg'){
+          if(before.icc==='unsupported')throw new ProtectedMedia('ICC profile gamut is not validated for photo reencoding; video-only remains available for live photos');
           if(c['compression.preset']==='lossless'||!c['compression.allowLossy'])
             throw new ProtectedMedia('No verified lossless JPEG optimizer; choose explicit reencode');
           if(c['compression.staticStrategy']==='lossless-first')warnings.push('No lossless JPEG saving route; explicit allowLossy permits JPEG reencode.');
@@ -121,6 +123,11 @@ export class Compressor {
           for(const segment of encodedMetadata){chunks.push(bytes.slice(position,segment.start));position=segment.end;}
           chunks.push(bytes.slice(position));const cleaned=concat(...chunks);
           bytes=concat(cleaned.subarray(0,2),...keep,cleaned.subarray(2));
+          if(before.icc){
+            if(c['compression.resizeImage'])throw new ProtectedMedia('ICC JPEG resizing needs a separate color validation route');
+            await validateJpegColor(input,bytes,signal);
+            warnings.push('ICC profile preserved byte-for-byte; browser color comparison passed.');
+          }
         }else if(before.format==='png'){
           if(c['compression.pngMode']==='skip')throw new ProtectedMedia('PNG disabled');
           if(c['compression.resizeImage'])throw new ProtectedMedia('PNG resize requires pixel/metadata validation');

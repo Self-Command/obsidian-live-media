@@ -9,5 +9,7 @@ import {mpfPictures,addMotionToHdr} from '../../src/media/hdr';
 import {appleFixture} from './apple-fixture';
 import {trustedApplePair,validateAppleMovie} from '../../src/media/apple';
 import {graftAppleVideo} from '../../src/media/graft';
+import {jpegIcc,validateJpegColor} from '../../src/media/color';
+import {profile,addIcc} from '../fixtures/icc';
 const engine = new OfflineEngine();
-Object.assign(window, {liveMediaHarness: {engine,Photo,PlaybackCoordinator,defaults,SettingsModel,schema,Compressor,probe,concat,jpegSegments,ascii,tracks,validateVideoPreservation,mpfPictures,addMotionToHdr,appleFixture,trustedApplePair,validateAppleMovie,graftAppleVideo}});
+Object.assign(window, {liveMediaHarness: {jpegIcc,validateJpegColor,profile,addIcc,engine,Photo,PlaybackCoordinator,defaults,SettingsModel,schema,Compressor,probe,concat,jpegSegments,ascii,tracks,validateVideoPreservation,mpfPictures,addMotionToHdr,appleFixture,trustedApplePair,validateAppleMovie,graftAppleVideo}});
