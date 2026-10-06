@@ -1,0 +1,1194 @@
+[
+  {
+    "key": "render.reading",
+    "group": "render",
+    "kind": "boolean",
+    "default": true,
+    "description": "阅读视图增强",
+    "spec": "布尔"
+  },
+  {
+    "key": "render.livePreview",
+    "group": "render",
+    "kind": "boolean",
+    "default": true,
+    "description": "实时预览增强，源代码编辑仍不改变",
+    "spec": "布尔"
+  },
+  {
+    "key": "render.gallery",
+    "group": "render",
+    "kind": "boolean",
+    "default": true,
+    "description": "已绑定图库宿主增强",
+    "spec": "布尔"
+  },
+  {
+    "key": "badge.enabled",
+    "group": "badge",
+    "kind": "boolean",
+    "default": true,
+    "description": "显示非交互 LIVE 标识",
+    "spec": "布尔"
+  },
+  {
+    "key": "badge.style",
+    "group": "badge",
+    "kind": "enum",
+    "default": "ring-text",
+    "description": "圆环与文字，不提供三角播放形状",
+    "spec": "ring-text／ring／text",
+    "options": [
+      "ring-text",
+      "ring",
+      "text"
+    ]
+  },
+  {
+    "key": "badge.text",
+    "group": "badge",
+    "kind": "text",
+    "default": "LIVE",
+    "description": "不接收 HTML",
+    "spec": "文本 1—12 字符",
+    "min": 1.0,
+    "max": 12.0,
+    "integer": false
+  },
+  {
+    "key": "badge.position",
+    "group": "badge",
+    "kind": "enum",
+    "default": "top-right",
+    "description": "位置",
+    "spec": "四角",
+    "options": [
+      "top-left",
+      "top-right",
+      "bottom-left",
+      "bottom-right"
+    ]
+  },
+  {
+    "key": "badge.sizePx",
+    "group": "badge",
+    "kind": "number",
+    "default": 18,
+    "description": "图形尺寸",
+    "spec": "整数 12—32",
+    "min": 12.0,
+    "max": 32.0,
+    "integer": true
+  },
+  {
+    "key": "badge.textPx",
+    "group": "badge",
+    "kind": "number",
+    "default": 11,
+    "description": "字号",
+    "spec": "整数 9—18",
+    "min": 9.0,
+    "max": 18.0,
+    "integer": true
+  },
+  {
+    "key": "badge.offsetPx",
+    "group": "badge",
+    "kind": "number",
+    "default": 8,
+    "description": "边缘间距",
+    "spec": "整数 0—24",
+    "min": 0.0,
+    "max": 24.0,
+    "integer": true
+  },
+  {
+    "key": "badge.opacity",
+    "group": "badge",
+    "kind": "number",
+    "default": 0.9,
+    "description": "不透明度",
+    "spec": "数字 0.2—1",
+    "min": 0.2,
+    "max": 1.0,
+    "integer": false
+  },
+  {
+    "key": "badge.color",
+    "group": "badge",
+    "kind": "text",
+    "default": "theme",
+    "description": "前景色",
+    "spec": "theme／合法颜色"
+  },
+  {
+    "key": "badge.background",
+    "group": "badge",
+    "kind": "text",
+    "default": "theme",
+    "description": "轻量底色",
+    "spec": "theme／transparent／合法颜色"
+  },
+  {
+    "key": "badge.radiusPx",
+    "group": "badge",
+    "kind": "number",
+    "default": 6,
+    "description": "背景圆角",
+    "spec": "整数 0—16",
+    "min": 0.0,
+    "max": 16.0,
+    "integer": true
+  },
+  {
+    "key": "badge.visibility",
+    "group": "badge",
+    "kind": "text",
+    "default": "always",
+    "description": "触屏 hover-focus 按焦点／播放状态降级",
+    "spec": "always／hover-focus"
+  },
+  {
+    "key": "manual.enabled",
+    "group": "manual",
+    "kind": "boolean",
+    "default": true,
+    "description": "用户动作播放",
+    "spec": "布尔"
+  },
+  {
+    "key": "manual.gesture",
+    "group": "manual",
+    "kind": "enum",
+    "default": "click",
+    "description": "非默认方式有平台与冲突说明",
+    "spec": "click／double-click／long-press／modified-click",
+    "options": [
+      "click",
+      "double-click",
+      "long-press",
+      "modified-click"
+    ]
+  },
+  {
+    "key": "manual.repeatAction",
+    "group": "manual",
+    "kind": "enum",
+    "default": "stop",
+    "description": "播放中再次点击",
+    "spec": "stop／restart",
+    "options": [
+      "stop",
+      "restart"
+    ]
+  },
+  {
+    "key": "manual.loopCount",
+    "group": "manual",
+    "kind": "mixed",
+    "default": 1,
+    "description": "整段重播次数；后台总是停止",
+    "spec": "1—20／continuous",
+    "options": [
+      "continuous"
+    ],
+    "min": 1.0,
+    "max": 20.0,
+    "integer": true
+  },
+  {
+    "key": "manual.sound",
+    "group": "manual",
+    "kind": "boolean",
+    "default": true,
+    "description": "仅真实手动请求允许声音",
+    "spec": "布尔"
+  },
+  {
+    "key": "manual.volumePercent",
+    "group": "manual",
+    "kind": "number",
+    "default": 80,
+    "description": "期望音量；不支持则用系统音量",
+    "spec": "整数 0—100",
+    "min": 0.0,
+    "max": 100.0,
+    "integer": true
+  },
+  {
+    "key": "manual.resume",
+    "group": "manual",
+    "kind": "enum",
+    "default": "restart",
+    "description": "默认从头；资源回收后 resume 降级为从头",
+    "spec": "restart／resume",
+    "options": [
+      "restart",
+      "resume"
+    ]
+  },
+  {
+    "key": "gesture.mouseTolerancePx",
+    "group": "gesture",
+    "kind": "number",
+    "default": 6,
+    "description": "点击与拖拽区分",
+    "spec": "整数 2—20",
+    "min": 2.0,
+    "max": 20.0,
+    "integer": true
+  },
+  {
+    "key": "gesture.touchTolerancePx",
+    "group": "gesture",
+    "kind": "number",
+    "default": 12,
+    "description": "轻触与滑动区分",
+    "spec": "整数 4—30",
+    "min": 4.0,
+    "max": 30.0,
+    "integer": true
+  },
+  {
+    "key": "gesture.longPressMs",
+    "group": "gesture",
+    "kind": "number",
+    "default": 500,
+    "description": "仅 long-press 生效，不绕过声音策略",
+    "spec": "整数 300—1200",
+    "min": 300.0,
+    "max": 1200.0,
+    "integer": true
+  },
+  {
+    "key": "gesture.modifier",
+    "group": "gesture",
+    "kind": "enum",
+    "default": "alt",
+    "description": "modified-click 生效",
+    "spec": "alt／shift／ctrl-or-cmd",
+    "options": [
+      "alt",
+      "shift",
+      "ctrl-or-cmd"
+    ]
+  },
+  {
+    "key": "host.clickPriority",
+    "group": "host",
+    "kind": "enum",
+    "default": "live",
+    "description": "实况与查看器仲裁，允许宿主单独覆盖",
+    "spec": "live／viewer",
+    "options": [
+      "live",
+      "viewer"
+    ]
+  },
+  {
+    "key": "host.passthroughModifier",
+    "group": "host",
+    "kind": "enum",
+    "default": "alt",
+    "description": "live 优先时将指定手势交回宿主",
+    "spec": "alt／shift／ctrl-or-cmd／none",
+    "options": [
+      "alt",
+      "shift",
+      "ctrl-or-cmd",
+      "none"
+    ]
+  },
+  {
+    "key": "accessibility.keyboard",
+    "group": "accessibility",
+    "kind": "boolean",
+    "default": true,
+    "description": "聚焦后 Enter／Space／Escape",
+    "spec": "布尔"
+  },
+  {
+    "key": "accessibility.respectReducedMotion",
+    "group": "accessibility",
+    "kind": "boolean",
+    "default": true,
+    "description": "用户可主动改变偏好；自动仍静音",
+    "spec": "布尔"
+  },
+  {
+    "key": "appearance.transitionMs",
+    "group": "appearance",
+    "kind": "number",
+    "default": 100,
+    "description": "图片与动态层切换，减少动态时为 0",
+    "spec": "整数 0—300",
+    "min": 0.0,
+    "max": 300.0,
+    "integer": true
+  },
+  {
+    "key": "auto.mode",
+    "group": "auto",
+    "kind": "enum",
+    "default": "first-visible",
+    "description": "本会话首次可见",
+    "spec": "off／first-visible／every-enter／visible-loop",
+    "options": [
+      "off",
+      "first-visible",
+      "every-enter",
+      "visible-loop"
+    ]
+  },
+  {
+    "key": "auto.durationMs",
+    "group": "auto",
+    "kind": "mixed",
+    "default": 3000,
+    "description": "自动预览时间；不裁切源文件",
+    "spec": "500—10000／full",
+    "options": [
+      "full"
+    ],
+    "min": 500.0,
+    "max": 10000.0,
+    "integer": false
+  },
+  {
+    "key": "auto.loopCount",
+    "group": "auto",
+    "kind": "number",
+    "default": 1,
+    "description": "非 visible-loop 的次数",
+    "spec": "整数 1—10",
+    "min": 1.0,
+    "max": 10.0,
+    "integer": true
+  },
+  {
+    "key": "auto.enterRatio",
+    "group": "auto",
+    "kind": "number",
+    "default": 0.6,
+    "description": "进入阈值",
+    "spec": "数字 0.1—1",
+    "min": 0.1,
+    "max": 1.0,
+    "integer": false
+  },
+  {
+    "key": "auto.exitRatio",
+    "group": "auto",
+    "kind": "number",
+    "default": 0.15,
+    "description": "必须小于进入阈值",
+    "spec": "数字 0—0.5",
+    "min": 0.0,
+    "max": 0.5,
+    "integer": false
+  },
+  {
+    "key": "auto.delayMs",
+    "group": "auto",
+    "kind": "number",
+    "default": 400,
+    "description": "稳定可见后启动",
+    "spec": "整数 0—2000",
+    "min": 0.0,
+    "max": 2000.0,
+    "integer": true
+  },
+  {
+    "key": "auto.cooldownMs",
+    "group": "auto",
+    "kind": "number",
+    "default": 5000,
+    "description": "每次进入／循环间隔",
+    "spec": "整数 0—30000",
+    "min": 0.0,
+    "max": 30000.0,
+    "integer": true
+  },
+  {
+    "key": "auto.concurrent",
+    "group": "auto",
+    "kind": "number",
+    "default": 1,
+    "description": "能力／预算可能降低实际值",
+    "spec": "整数 1—3",
+    "min": 1.0,
+    "max": 3.0,
+    "integer": true
+  },
+  {
+    "key": "auto.hover",
+    "group": "auto",
+    "kind": "boolean",
+    "default": false,
+    "description": "桌面悬停预览，永远静音",
+    "spec": "布尔"
+  },
+  {
+    "key": "auto.hoverDelayMs",
+    "group": "auto",
+    "kind": "number",
+    "default": 250,
+    "description": "桌面悬停延迟",
+    "spec": "整数 100—1500",
+    "min": 100.0,
+    "max": 1500.0,
+    "integer": true
+  },
+  {
+    "key": "auto.hoverEnd",
+    "group": "auto",
+    "kind": "enum",
+    "default": "stop",
+    "description": "离开悬停的行为；离开页面立即停止",
+    "spec": "stop／finish-current",
+    "options": [
+      "stop",
+      "finish-current"
+    ]
+  },
+  {
+    "key": "auto.remember",
+    "group": "auto",
+    "kind": "enum",
+    "default": "session",
+    "description": "首次预览记录，可主动清除",
+    "spec": "session／persistent",
+    "options": [
+      "session",
+      "persistent"
+    ]
+  },
+  {
+    "key": "auto.scope",
+    "group": "auto",
+    "kind": "enum",
+    "default": "reading-and-preview",
+    "description": "自动作用视图",
+    "spec": "reading／reading-and-preview",
+    "options": [
+      "reading",
+      "reading-and-preview"
+    ]
+  },
+  {
+    "key": "auto.mobile",
+    "group": "auto",
+    "kind": "boolean",
+    "default": true,
+    "description": "移动端自动预览；依能力降级",
+    "spec": "布尔"
+  },
+  {
+    "key": "auto.lowResource",
+    "group": "auto",
+    "kind": "enum",
+    "default": "limit-one",
+    "description": "预算不足时实际策略",
+    "spec": "stop／limit-one",
+    "options": [
+      "stop",
+      "limit-one"
+    ]
+  },
+  {
+    "key": "detect.native",
+    "group": "detect",
+    "kind": "boolean",
+    "default": true,
+    "description": "原生嵌入",
+    "spec": "布尔"
+  },
+  {
+    "key": "detect.html",
+    "group": "detect",
+    "kind": "boolean",
+    "default": true,
+    "description": "HTML 与响应式图片",
+    "spec": "布尔"
+  },
+  {
+    "key": "detect.codeCandidates",
+    "group": "detect",
+    "kind": "boolean",
+    "default": true,
+    "description": "未知块中的标准引用作为候选",
+    "spec": "布尔"
+  },
+  {
+    "key": "detect.rendered",
+    "group": "detect",
+    "kind": "boolean",
+    "default": true,
+    "description": "当前宿主渲染补充",
+    "spec": "布尔"
+  },
+  {
+    "key": "detect.frontmatterFields",
+    "group": "detect",
+    "kind": "json",
+    "default": [
+      "cover",
+      "coverImage"
+    ],
+    "description": "仅登记字段；默认列候选，未显示不自动处理",
+    "spec": "字段列表"
+  },
+  {
+    "key": "detect.rules",
+    "group": "detect",
+    "kind": "json",
+    "default": [
+      {
+        "id": "simple-gallery",
+        "language": "simple-gallery",
+        "structure": "list",
+        "evidence": "direct",
+        "enabled": true
+      }
+    ],
+    "description": "语言／结构／字段／基准／证据",
+    "spec": "声明式规则列表"
+  },
+  {
+    "key": "detect.providers",
+    "group": "detect",
+    "kind": "json",
+    "default": {},
+    "description": "错误隔离，显示版本",
+    "spec": "提供者开关表"
+  },
+  {
+    "key": "scope.includeFolders",
+    "group": "scope",
+    "kind": "json",
+    "default": [],
+    "description": "空表示全库范围，无个人路径",
+    "spec": "库内目录列表"
+  },
+  {
+    "key": "scope.excludeFolders",
+    "group": "scope",
+    "kind": "json",
+    "default": [],
+    "description": "强制排除配置、回收站和自有工具目录另行说明",
+    "spec": "库内目录列表"
+  },
+  {
+    "key": "scope.extensions",
+    "group": "scope",
+    "kind": "json",
+    "default": [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "gif",
+      "avif",
+      "heic",
+      "heif",
+      "tif",
+      "tiff",
+      "bmp",
+      "svg"
+    ],
+    "description": "枚举不等于允许压缩",
+    "spec": "扩展名列表"
+  },
+  {
+    "key": "scope.embeddedNotes",
+    "group": "scope",
+    "kind": "boolean",
+    "default": false,
+    "description": "包含嵌入笔记，保留来源",
+    "spec": "布尔"
+  },
+  {
+    "key": "scope.dynamicSelected",
+    "group": "scope",
+    "kind": "boolean",
+    "default": false,
+    "description": "动态展示默认勾选策略",
+    "spec": "布尔"
+  },
+  {
+    "key": "scope.order",
+    "group": "scope",
+    "kind": "text",
+    "default": "document",
+    "description": "当前文档默认源码顺序，全库降级 path",
+    "spec": "document／path／size-desc"
+  },
+  {
+    "key": "pairing.sameNameCandidates",
+    "group": "pairing",
+    "kind": "boolean",
+    "default": true,
+    "description": "展示同名候选，不升级为可信原生配对",
+    "spec": "布尔"
+  },
+  {
+    "key": "pairing.explicit",
+    "group": "pairing",
+    "kind": "json",
+    "default": [],
+    "description": "用户确认播放，不能伪造 Apple 元数据",
+    "spec": "显式媒体组登记"
+  },
+  {
+    "key": "compatibility.legacyLive",
+    "group": "compatibility",
+    "kind": "boolean",
+    "default": false,
+    "description": "历史 live 语法，检测所有权冲突",
+    "spec": "布尔"
+  },
+  {
+    "key": "compatibility.hostOverrides",
+    "group": "compatibility",
+    "kind": "json",
+    "default": {},
+    "description": "继承全局或单独禁用增强",
+    "spec": "宿主策略表"
+  },
+  {
+    "key": "network.remote",
+    "group": "network",
+    "kind": "boolean",
+    "default": false,
+    "description": "只允许用户手动读取远程媒体，自动播放不发起外部下载",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.defaultScope",
+    "group": "compression",
+    "kind": "enum",
+    "default": "current-note",
+    "description": "每次执行仍显示清单",
+    "spec": "current-note／selected-files／vault",
+    "options": [
+      "current-note",
+      "selected-files",
+      "vault"
+    ]
+  },
+  {
+    "key": "compression.output",
+    "group": "compression",
+    "kind": "enum",
+    "default": "copy",
+    "description": "replace 每批确认，保持原路径",
+    "spec": "copy／replace",
+    "options": [
+      "copy",
+      "replace"
+    ]
+  },
+  {
+    "key": "compression.preset",
+    "group": "compression",
+    "kind": "enum",
+    "default": "balanced",
+    "description": "显示真实有效参数，不能泛称所有视频无损压缩",
+    "spec": "balanced／high／lossless／custom",
+    "options": [
+      "balanced",
+      "high",
+      "lossless",
+      "custom"
+    ]
+  },
+  {
+    "key": "compression.staticStrategy",
+    "group": "compression",
+    "kind": "enum",
+    "default": "lossless-first",
+    "description": "已验证静态格式无损优化优先；失败后须允许有损才重编码",
+    "spec": "lossless-first／reencode",
+    "options": [
+      "lossless-first",
+      "reencode"
+    ]
+  },
+  {
+    "key": "compression.allowLossy",
+    "group": "compression",
+    "kind": "boolean",
+    "default": true,
+    "description": "仅用户已选择的受支持路线",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.jpegQuality",
+    "group": "compression",
+    "kind": "number",
+    "default": 85,
+    "description": "JPEG 有损编码",
+    "spec": "整数 50—100",
+    "min": 50.0,
+    "max": 100.0,
+    "integer": true
+  },
+  {
+    "key": "compression.webpQuality",
+    "group": "compression",
+    "kind": "number",
+    "default": 85,
+    "description": "保留 WebP，动画保护",
+    "spec": "整数 50—100",
+    "min": 50.0,
+    "max": 100.0,
+    "integer": true
+  },
+  {
+    "key": "compression.pngMode",
+    "group": "compression",
+    "kind": "enum",
+    "default": "lossless",
+    "description": "不隐式降低透明或颜色精度",
+    "spec": "lossless／skip",
+    "options": [
+      "lossless",
+      "skip"
+    ]
+  },
+  {
+    "key": "compression.liveMode",
+    "group": "compression",
+    "kind": "enum",
+    "default": "video-only",
+    "description": "各路线需独立满足保护条件",
+    "spec": "video-only／photo-and-video／photo-only",
+    "options": [
+      "video-only",
+      "photo-and-video",
+      "photo-only"
+    ]
+  },
+  {
+    "key": "compression.videoQuality",
+    "group": "compression",
+    "kind": "enum",
+    "default": "balanced",
+    "description": "后端映射与结果明示",
+    "spec": "balanced／high／custom",
+    "options": [
+      "balanced",
+      "high",
+      "custom"
+    ]
+  },
+  {
+    "key": "compression.ffmpegCrf",
+    "group": "compression",
+    "kind": "number",
+    "default": 23,
+    "description": "仅对应已验证 FFmpeg 后端",
+    "spec": "整数 16—30",
+    "min": 16.0,
+    "max": 30.0,
+    "integer": true
+  },
+  {
+    "key": "compression.targetVideoMbps",
+    "group": "compression",
+    "kind": "number",
+    "default": 6,
+    "description": "仅固定码率后端生效，不同时当 CRF",
+    "spec": "数字 0.5—50",
+    "min": 0.5,
+    "max": 50.0,
+    "integer": false
+  },
+  {
+    "key": "compression.resizeImage",
+    "group": "compression",
+    "kind": "boolean",
+    "default": false,
+    "description": "显式缩放，不能自动改 HDR",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.maxImageEdge",
+    "group": "compression",
+    "kind": "number",
+    "default": 2560,
+    "description": "resizeImage 开启才生效",
+    "spec": "整数 512—8192",
+    "min": 512.0,
+    "max": 8192.0,
+    "integer": true
+  },
+  {
+    "key": "compression.resizeVideo",
+    "group": "compression",
+    "kind": "boolean",
+    "default": false,
+    "description": "显式缩放；方向与时间不变",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.maxVideoEdge",
+    "group": "compression",
+    "kind": "number",
+    "default": 1440,
+    "description": "后端能力与偶数尺寸校验",
+    "spec": "整数 480—3840",
+    "min": 480.0,
+    "max": 3840.0,
+    "integer": true
+  },
+  {
+    "key": "compression.minSavingPercent",
+    "group": "compression",
+    "kind": "number",
+    "default": 5,
+    "description": "更大输出永不自动替换",
+    "spec": "数字 0—50",
+    "min": 0.0,
+    "max": 50.0,
+    "integer": false
+  },
+  {
+    "key": "compression.formats",
+    "group": "compression",
+    "kind": "json",
+    "default": {
+      "jpeg": true,
+      "png": true,
+      "webp": true,
+      "motion-jpeg": true,
+      "apple-pair": false
+    },
+    "description": "不能手工把不支持格式设成支持",
+    "spec": "支持格式开关表"
+  },
+  {
+    "key": "compression.backend",
+    "group": "compression",
+    "kind": "enum",
+    "default": "auto",
+    "description": "只选已验证且在本机可用者",
+    "spec": "auto／webcodecs／wasm／native",
+    "options": [
+      "auto",
+      "webcodecs",
+      "wasm",
+      "native"
+    ]
+  },
+  {
+    "key": "compression.preserveExif",
+    "group": "compression",
+    "kind": "boolean",
+    "default": true,
+    "description": "允许清除普通可选 EXIF；受保护配对／方向等除外",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.preserveGps",
+    "group": "compression",
+    "kind": "boolean",
+    "default": true,
+    "description": "清除 GPS 必须明确选择；保留必要元数据",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.keepFileTimes",
+    "group": "compression",
+    "kind": "boolean",
+    "default": true,
+    "description": "尽力保留，不以 mtime 代替内容版本",
+    "spec": "布尔"
+  },
+  {
+    "key": "compression.includeShared",
+    "group": "compression",
+    "kind": "enum",
+    "default": "confirm",
+    "description": "共享原件影响范围需确认",
+    "spec": "confirm／skip",
+    "options": [
+      "confirm",
+      "skip"
+    ]
+  },
+  {
+    "key": "compression.repeated",
+    "group": "compression",
+    "kind": "enum",
+    "default": "skip-owned",
+    "description": "按指纹与日志判断，不猜第三方压缩历史",
+    "spec": "skip-owned／ask",
+    "options": [
+      "skip-owned",
+      "ask"
+    ]
+  },
+  {
+    "key": "performance.cacheMiB",
+    "group": "performance",
+    "kind": "number",
+    "default": 48,
+    "description": "仅媒体字节缓存，不冒充整个进程内存上限",
+    "spec": "整数 8—256",
+    "min": 8.0,
+    "max": 256.0,
+    "integer": true
+  },
+  {
+    "key": "performance.cacheEntries",
+    "group": "performance",
+    "kind": "number",
+    "default": 50,
+    "description": "与字节上限同时生效",
+    "spec": "整数 5—200",
+    "min": 5.0,
+    "max": 200.0,
+    "integer": true
+  },
+  {
+    "key": "performance.preload",
+    "group": "performance",
+    "kind": "enum",
+    "default": "visible",
+    "description": "全库不预读全部文件",
+    "spec": "visible／near-visible／manual",
+    "options": [
+      "visible",
+      "near-visible",
+      "manual"
+    ]
+  },
+  {
+    "key": "performance.marginPx",
+    "group": "performance",
+    "kind": "number",
+    "default": 200,
+    "description": "near-visible 生效",
+    "spec": "整数 0—1000",
+    "min": 0.0,
+    "max": 1000.0,
+    "integer": true
+  },
+  {
+    "key": "performance.probeConcurrent",
+    "group": "performance",
+    "kind": "number",
+    "default": 2,
+    "description": "探测分批",
+    "spec": "整数 1—4",
+    "min": 1.0,
+    "max": 4.0,
+    "integer": true
+  },
+  {
+    "key": "performance.maxInputMiB",
+    "group": "performance",
+    "kind": "number",
+    "default": 128,
+    "description": "超限跳过，可用户调整",
+    "spec": "整数 8—512",
+    "min": 8.0,
+    "max": 512.0,
+    "integer": true
+  },
+  {
+    "key": "performance.maxPixelsMp",
+    "group": "performance",
+    "kind": "number",
+    "default": 48,
+    "description": "避免超大解码；实际内存另核算",
+    "spec": "整数 4—100",
+    "min": 4.0,
+    "max": 100.0,
+    "integer": true
+  },
+  {
+    "key": "performance.warmSeconds",
+    "group": "performance",
+    "kind": "number",
+    "default": 10,
+    "description": "离屏无引用资源的预热保留期",
+    "spec": "整数 0—60",
+    "min": 0.0,
+    "max": 60.0,
+    "integer": true
+  },
+  {
+    "key": "performance.encodePriority",
+    "group": "performance",
+    "kind": "enum",
+    "default": "low",
+    "description": "后端支持时执行",
+    "spec": "normal／low",
+    "options": [
+      "normal",
+      "low"
+    ]
+  },
+  {
+    "key": "storage.copyDirectory",
+    "group": "storage",
+    "kind": "text",
+    "default": "alongside",
+    "description": "同目录安全副本；不自动改文章引用",
+    "spec": "相对路径／alongside"
+  },
+  {
+    "key": "storage.copySuffix",
+    "group": "storage",
+    "kind": "text",
+    "default": "-compressed",
+    "description": "保留原扩展名，冲突不覆盖",
+    "spec": "文本 1—24 字符",
+    "min": 1.0,
+    "max": 24.0,
+    "integer": false
+  },
+  {
+    "key": "storage.backupDirectory",
+    "group": "storage",
+    "kind": "text",
+    "default": ".live-media-backups",
+    "description": "不与业务目录／输出目录混用",
+    "spec": "合法库内隐藏目录"
+  },
+  {
+    "key": "storage.reportDirectory",
+    "group": "storage",
+    "kind": "text",
+    "default": ".live-media-reports",
+    "description": "私人完整日志与公开脱敏报告分开",
+    "spec": "合法库内隐藏目录"
+  },
+  {
+    "key": "storage.backupRetention",
+    "group": "storage",
+    "kind": "enum",
+    "default": "keep",
+    "description": "天数策略仅提出待清理清单，不后台删除",
+    "spec": "keep／manual-days",
+    "options": [
+      "keep",
+      "manual-days"
+    ]
+  },
+  {
+    "key": "storage.backupDays",
+    "group": "storage",
+    "kind": "number",
+    "default": 90,
+    "description": "manual-days 生效，仍需主动清理",
+    "spec": "整数 7—3650",
+    "min": 7.0,
+    "max": 3650.0,
+    "integer": true
+  },
+  {
+    "key": "storage.diskReserveMiB",
+    "group": "storage",
+    "kind": "number",
+    "default": 256,
+    "description": "后端能查询则预检；不可查询标记受限",
+    "spec": "整数 64—4096",
+    "min": 64.0,
+    "max": 4096.0,
+    "integer": true
+  },
+  {
+    "key": "native.executable",
+    "group": "native",
+    "kind": "text",
+    "default": "",
+    "description": "高级桌面后端；不从同步配置直接授权执行",
+    "spec": "本机绝对路径"
+  },
+  {
+    "key": "native.enabled",
+    "group": "native",
+    "kind": "boolean",
+    "default": false,
+    "description": "本设备确认后生效，手机禁用",
+    "spec": "布尔"
+  },
+  {
+    "key": "diagnostics.level",
+    "group": "diagnostics",
+    "kind": "enum",
+    "default": "errors",
+    "description": "不记录正文／照片字节",
+    "spec": "off／errors／verbose",
+    "options": [
+      "off",
+      "errors",
+      "verbose"
+    ]
+  },
+  {
+    "key": "diagnostics.notices",
+    "group": "diagnostics",
+    "kind": "enum",
+    "default": "summary",
+    "description": "播放失败提示去重",
+    "spec": "errors／summary／none",
+    "options": [
+      "errors",
+      "summary",
+      "none"
+    ]
+  },
+  {
+    "key": "diagnostics.publicPaths",
+    "group": "diagnostics",
+    "kind": "enum",
+    "default": "redact",
+    "description": "默认公开报告隐藏路径",
+    "spec": "redact／relative",
+    "options": [
+      "redact",
+      "relative"
+    ]
+  },
+  {
+    "key": "settings.language",
+    "group": "settings",
+    "kind": "enum",
+    "default": "system",
+    "description": "不翻译底层稳定值",
+    "spec": "system／zh／en",
+    "options": [
+      "system",
+      "zh",
+      "en"
+    ]
+  },
+  {
+    "key": "settings.overrideNotes",
+    "group": "settings",
+    "kind": "boolean",
+    "default": false,
+    "description": "允许读取明确命名空间的笔记偏好",
+    "spec": "布尔"
+  },
+  {
+    "key": "settings.overridePhotos",
+    "group": "settings",
+    "kind": "boolean",
+    "default": true,
+    "description": "插件设置中的单照片偏好",
+    "spec": "布尔"
+  },
+  {
+    "key": "settings.syncPlatformProfiles",
+    "group": "settings",
+    "kind": "boolean",
+    "default": true,
+    "description": "平台偏好可同步，设备能力不沿用",
+    "spec": "布尔"
+  }
+]

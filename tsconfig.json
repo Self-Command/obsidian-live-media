@@ -8,6 +8,7 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"]
