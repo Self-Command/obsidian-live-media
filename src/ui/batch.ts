@@ -108,32 +108,51 @@ class PrepareModal extends Modal {
   override onClose():void {if(!this.allowClose)this.batch.cancel();this.contentEl.empty();}
 }
 class CompareModal extends Modal {
-  private urls:string[]=[];private coordinator:PlaybackCoordinator;private selected=new Set<string>();
+  private coordinator:PlaybackCoordinator;private selected=new Set<string>();
+  private observer?:IntersectionObserver;private closed=false;
+  private previews=new Map<HTMLElement,{item:Prepared;generation:number;active:boolean;urls:string[];photos:Photo[]}>();
   constructor(app:App,private batch:BatchService,private items:Prepared[],private config:Config){super(app);this.coordinator=new PlaybackCoordinator(()=>({...config,'auto.mode':'off'}));}
   override onOpen():void {
     this.contentEl.addClass('live-media');this.titleEl.setText('3 · 对比并确认 / Review');
+    this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const grid=entry.target as HTMLElement;if(entry.isIntersecting)void this.mount(grid);else this.release(grid);}},{rootMargin:'160px'});
     this.contentEl.createEl('p',{text:`输出：${this.config['compression.output']==='copy'?'同扩展名副本，文章引用保持原件':'替换原件，先保存并校验备份'}。照片可直接点击播放；取消不写入。`});
     for(const item of this.items){
       const card=this.contentEl.createDiv({cls:'live-media-compare'});card.createEl('h3',{text:item.path});
       if(!item.encoded){card.createEl('p',{text:item.reason??'未编码'});continue;}
       this.selected.add(item.path);
-      new Setting(card).setName(`${(item.input.length/1048576).toFixed(2)} → ${(item.encoded.bytes.length/1048576).toFixed(2)} MiB`)
+      new Setting(card).setName(`${((item.inputBytes??item.input.length)/1048576).toFixed(2)} → ${(item.encoded.bytes.length/1048576).toFixed(2)} MiB`)
         .setDesc(item.encoded.warnings.join(' ')).addToggle(t=>t.setValue(true).setDisabled(!!item.group).onChange(v=>{if(v)this.selected.add(item.path);else this.selected.delete(item.path);}));
       if(item.encoded.before.format==='mov'){card.createEl('p',{text:'与照片作为同一媒体组处理；不显示视频播放器。'});continue;}
-      const grid=card.createDiv({cls:'live-media-compare-grid'});
-      for(const [label,bytes,p] of [['原件',item.input,item.encoded.before],['结果',item.encoded.bytes,item.encoded.after]]as const){
-        const cell=grid.createDiv();cell.createEl('p',{text:label});const image=cell.createEl('img',{attr:{alt:label}});
-        const url=URL.createObjectURL(new Blob([bytes.slice().buffer]));this.urls.push(url);image.src=url;
-        if(p.live&&p.videoStart!==undefined){const videoURL=URL.createObjectURL(new Blob([bytes.slice(p.videoStart).buffer],{type:'video/mp4'}));this.urls.push(videoURL);
-          new Photo(image,videoURL,()=>({...this.config,'auto.mode':'off'}),this.coordinator,()=>true,()=>{},m=>new Notice(m),()=>{});}
-      }
+      const grid=card.createDiv({cls:'live-media-compare-grid'});grid.style.minHeight='180px';
+      grid.createEl('p',{text:'滚动到此处加载原件与结果 / Load comparison when visible'});
+      this.previews.set(grid,{item,generation:0,active:false,urls:[],photos:[]});this.observer.observe(grid);
     }
     new Setting(this.contentEl).setName('最终确认 · Final confirmation').addButton(b=>b.setButtonText('保存已选结果').setCta().onClick(()=>{
       if(!this.selected.size){new Notice('No validated results selected');return;}
       const items=this.items.filter(i=>this.selected.has(i.path));this.close();new CommitModal(this.app,this.batch,items,this.config).open();
     }));
   }
-  override onClose():void {this.coordinator.destroy();for(const u of this.urls)URL.revokeObjectURL(u);this.contentEl.empty();}
+  private async mount(grid:HTMLElement):Promise<void>{
+    const state=this.previews.get(grid);if(!state||state.active||this.closed)return;
+    state.active=true;const generation=++state.generation,item=state.item;
+    try{
+      const original=await this.batch.original(item);
+      if(this.closed||generation!==state.generation||!state.active)return;grid.empty();
+      for(const [label,bytes,p] of [['原件',original,item.encoded!.before],['结果',item.encoded!.bytes,item.encoded!.after]]as const){
+        const cell=grid.createDiv();cell.createEl('p',{text:label});const image=cell.createEl('img',{attr:{alt:label}});
+        const url=URL.createObjectURL(new Blob([bytes.slice().buffer]));state.urls.push(url);image.src=url;
+        if(p.live&&p.videoStart!==undefined){const videoURL=URL.createObjectURL(new Blob([bytes.slice(p.videoStart).buffer],{type:'video/mp4'}));state.urls.push(videoURL);
+          state.photos.push(new Photo(image,videoURL,()=>({...this.config,'auto.mode':'off'}),this.coordinator,()=>true,()=>{},m=>new Notice(m),()=>{}));}
+      }
+    }catch(error){if(!this.closed&&generation===state.generation){grid.empty();grid.createEl('p',{text:String(error)});}}
+  }
+  private release(grid:HTMLElement):void{
+    const state=this.previews.get(grid);if(!state)return;state.generation++;state.active=false;
+    for(const photo of state.photos)photo.destroy();state.photos=[];
+    for(const url of state.urls)URL.revokeObjectURL(url);state.urls=[];
+    grid.empty();grid.createEl('p',{text:'滚动到此处加载原件与结果 / Load comparison when visible'});
+  }
+  override onClose():void {this.closed=true;this.observer?.disconnect();for(const grid of this.previews.keys())this.release(grid);this.previews.clear();this.coordinator.destroy();this.contentEl.empty();}
 }
 class CommitModal extends Modal {
   constructor(app:App,private batch:BatchService,private items:Prepared[],private config:Config){super(app);}

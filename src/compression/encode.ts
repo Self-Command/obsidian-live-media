@@ -2,7 +2,7 @@
 import {OfflineEngine} from '../engine/client';
 import {probe, type MediaProbe} from '../media/probe';
 import {replaceMotionVideo} from '../media/motion';
-import {restoreMotionEndTime} from '../media/timeline';
+import {restoreMotionEndTime,motionMuxTiming} from '../media/timeline';
 import {validateVideoPreservation,validateCoverTime} from '../media/mp4';
 import {ascii, concat, equal, jpegSegments,u32} from '../media/bytes';
 import type {Config} from '../settings/model';
@@ -50,7 +50,7 @@ export class Compressor {
           args.push('-c','copy','-c:v','libx264','-crf',String(crf),'-preset',c['performance.encodePriority']==='low'?'veryfast':'medium','-fps_mode','passthrough','-enc_time_base:v','-1');
           if(c['compression.resizeVideo'])args.push('-vf',`scale='min(${c['compression.maxVideoEdge']},iw)':'min(${c['compression.maxVideoEdge']},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`);
         }
-        args.push('-movflags','+faststart','$OUTPUT');
+        args.push(...motionMuxTiming(video),'-movflags','+faststart','$OUTPUT');
         let output=c['compression.liveMode']==='photo-only'?video:await backend.encode(video,'mp4',args);
         if(!lossless&&c['compression.liveMode']!=='photo-only'&&!c['compression.resizeVideo'])output=restoreMotionEndTime(video,output);
         await backend.validate(output);
@@ -105,6 +105,7 @@ export class Compressor {
           const segments=jpegSegments(input);
           const metadata=segments.filter(s=>s.marker>=0xe0&&s.marker<=0xef&&s.marker!==0xe0);
           if(applePhotoId(input))throw new ProtectedMedia('Apple paired photo must be processed as a verified media group');
+          if(metadata.some(s=>s.marker===0xee&&ascii(input,s.payload,5)==='Adobe'&&input[s.payload+11]!==1))throw new ProtectedMedia('Adobe RGB JPEG transform requires a dedicated metadata writer');
           if(metadata.some(s=>ascii(input,s.payload,4)==='MPF\0'))throw new ProtectedMedia('Multi-picture JPEG protected');
           const quality=Number(c['compression.jpegQuality']);
           const args=['-v','error','-noautorotate','-i','$INPUT','-frames:v','1','-q:v',String(Math.max(2,Math.round(31-(quality-50)*29/50)))];

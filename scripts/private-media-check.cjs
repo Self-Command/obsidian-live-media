@@ -2,7 +2,7 @@
 // Private input/output stay local. Do not add private files to Git or CI artifacts.
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),crypto=require('node:crypto');
 const [artifact,manifestPath,output,browserExecutable,playwrightDir,mode='serial']=process.argv.slice(2);
-if(!artifact||!manifestPath||!output||!browserExecutable||!playwrightDir)throw new Error('Usage: artifact manifest output browser playwright [serial|isolated|baseline]');
+if(!artifact||!manifestPath||!output||!browserExecutable||!playwrightDir)throw new Error('Usage: artifact manifest output browser playwright [serial|isolated|baseline|batch]');
 const {chromium}=require(playwrightDir);
 const proof=JSON.parse(fs.readFileSync(path.join(artifact,'provenance.json'))),input=JSON.parse(fs.readFileSync(manifestPath));
 const harness=fs.readFileSync(path.join(artifact,'harness.js'));
@@ -43,6 +43,28 @@ const server=http.createServer(async(req,res)=>{
   await page.evaluate(()=>{const e=window.liveMediaHarness.engine,run=e.run.bind(e);e.run=async(op,data)=>{await window.traceMedia({index:window.photoIndex,op,state:'start'});try{const r=await run(op,data);await window.traceMedia({index:window.photoIndex,op,state:'done'});return r;}catch(error){await window.traceMedia({index:window.photoIndex,op,state:'failed',reason:String(error).slice(0,240)});throw error;}};});
   if(process.env.PRIVATE_THREADS==='1')await page.evaluate(()=>{const e=window.liveMediaHarness.engine,encode=e.encode.bind(e);e.encode=(b,x,args,out)=>encode(b,x,['-threads','1','-filter_threads','1',...args.slice(0,-1),'-threads','1',args[args.length-1]],out);});
   const started=new Date();let passed=0,skipped=0,failed=0;
+  if(mode==='batch'){
+    const result=await page.evaluate(async({base,token,items})=>{
+      const h=window.liveMediaHarness,c=h.defaults(),e=h.engine,outputs=new Map(),logs=new Map();
+      const paths=items.map(item=>'photos/'+item.relative),lookup=new Map(paths.map((p,i)=>[p,i]));
+      const store={
+        read:async p=>{if(outputs.has(p))return outputs.get(p);const index=lookup.get(p);window.photoIndex=index;if(index===undefined)throw new Error('Missing runtime input');return new Uint8Array(await(await fetch(base+'/photo?token='+token+'&index='+index)).arrayBuffer());},
+        exists:async p=>outputs.has(p)||logs.has(p),
+        create:async(p,b)=>{if(outputs.has(p))throw new Error('Runtime copy collision');const index=paths.findIndex(source=>source.replace(/\.[^.]+$/, '-compressed.jpg')===p);if(index<0)throw new Error('Unknown output');const r=await fetch(base+'/output?token='+token+'&index='+index,{method:'POST',body:b});if(!r.ok)throw new Error(await r.text());outputs.set(p,b);},
+        replace:async()=>{throw new Error('Private acceptance uses copies only');},
+        hiddenRead:async p=>{if(!logs.has(p))throw new Error('Missing log');return logs.get(p);},hiddenWrite:async(p,text)=>{logs.set(p,text);},backup:async()=>{throw new Error('Copy route does not back up');}
+      };
+      const batch=new h.BatchService(store,new h.Compressor(e));window.runtimeBatch=batch;
+      const prepared=await batch.prepare(paths,c,item=>{window.photoIndex=lookup.get(item.path);void window.traceMedia({index:lookup.get(item.path),op:'prepared',state:item.encoded?'passed':item.outcome==='protected'?'skipped':'failed',reason:item.reason});});
+      const released=prepared.every(item=>item.input.length===0);
+      const committed=await batch.commit(prepared.filter(item=>item.encoded),c);
+      const rows=prepared.map(item=>({index:lookup.get(item.path),relative:items[lookup.get(item.path)].relative,inputSha256:item.fingerprint,state:item.encoded?'passed':item.outcome==='protected'?'skipped':'failed',reason:item.reason,inputBytes:item.inputBytes,outputBytes:item.encoded?.bytes.length,live:item.encoded?.before.live,hdr:item.encoded?.before.hdr}));
+      e.destroy();return {rows,released,committed:committed.map(log=>({state:log.state,error:log.error})),peakPreviewBytes:prepared.reduce((sum,item)=>sum+(item.encoded?.bytes.length??0),0)};
+    },{base,token,items});
+    for(const row of result.rows)fs.appendFileSync(journal,JSON.stringify(row)+'\n');
+    const summary={artifact:proof.commit,runId:proof.runId,browser:await browser.version(),mode,started:started.toISOString(),finished:new Date().toISOString(),passed:result.rows.filter(r=>r.state==='passed').length,skipped:result.rows.filter(r=>r.state==='skipped').length,failed:result.rows.filter(r=>r.state==='failed').length+result.committed.filter(log=>log.state!=='committed').length,total:items.length,released:result.released,previewBytes:result.peakPreviewBytes,committed:result.committed.filter(log=>log.state==='committed').length,privacy:'local copied photos; downloaded artifact; original source read-only; not Obsidian UI acceptance'};
+    fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify(summary,null,2));fs.writeFileSync(path.join(output,'commit-checks.json'),JSON.stringify(result.committed,null,2));console.log(JSON.stringify(summary));return;
+  }
   for(let index=0;index<items.length;index++){
    if(process.env.PRIVATE_ONLY&&!process.env.PRIVATE_ONLY.split(',').map(Number).includes(index))continue;
    const result=await page.evaluate(async({base,token,index,mode})=>{

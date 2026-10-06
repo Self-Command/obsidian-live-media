@@ -19,7 +19,7 @@ export interface Journal {
   version:1;id:string;source:string;target:string;originalHash:string;outputHash:string;backup?:string;
   state:State;output:'copy'|'replace';timestamp:number;settingsHash:string;error?:string;group?:string;
 }
-export interface Prepared {path:string;input:Uint8Array;fingerprint:string;encoded?:Encoded;reason?:string;settingsHash:string;group?:string}
+export interface Prepared {path:string;input:Uint8Array;inputBytes?:number;fingerprint:string;encoded?:Encoded;reason?:string;outcome?:'protected'|'failed';settingsHash:string;group?:string}
 export class BatchService {
   busy=false;private controller?:AbortController;
   constructor(private store:Store,private compressor:Compressor){}
@@ -36,7 +36,7 @@ export class BatchService {
         const config=configFor?.(path)??baseConfig;const settingsHash=await hash(new TextEncoder().encode(JSON.stringify(config)));
         const item:Prepared={path,input:new Uint8Array(),fingerprint:'',settingsHash};
         try{
-          item.input=await this.store.read(path);item.fingerprint=await hash(item.input);
+          item.input=await this.store.read(path);item.inputBytes=item.input.length;item.fingerprint=await hash(item.input);
           if(previewBytes+item.input.length*2>previewBudget){item.input=new Uint8Array();throw new ProtectedMedia('Batch preview memory budget reached; select a smaller range');}
           const free=await this.store.availableBytes?.();
           if(free!==undefined&&free<item.input.length*4+Number(config['storage.diskReserveMiB'])*1048576)throw new ProtectedMedia('Insufficient free space reserve');
@@ -60,16 +60,22 @@ export class BatchService {
             const photoProbe=probe(item.input);
             item.encoded={bytes:encoded.photo,before:photoProbe,after:photoProbe,backend:'wasm',warnings:['Trusted Apple media group; static photo unchanged.']};
             const movieProbe:MediaProbe={format:'mov',live:true,hdr:false,protected:[],capability:'play-only'};
-            const companion:Prepared={path:moviePath,input:movie,fingerprint:await hash(movie),settingsHash,group,encoded:{bytes:encoded.movie,before:movieProbe,after:movieProbe,backend:'wasm',warnings:['Apple metadata/audio/timed samples verified; phone recognition still needs device acceptance.']}};
-            result.push(companion);onProgress?.(companion);previewBytes+=movie.length+encoded.movie.length;
+            const companion:Prepared={path:moviePath,input:new Uint8Array(),inputBytes:movie.length,fingerprint:await hash(movie),settingsHash,group,encoded:{bytes:encoded.movie,before:movieProbe,after:movieProbe,backend:'wasm',warnings:['Apple metadata/audio/timed samples verified; phone recognition still needs device acceptance.']}};
+            result.push(companion);onProgress?.(companion);previewBytes+=encoded.movie.length;
             processed.add(moviePath);
           }else item.encoded=await this.compressor.encode(item.input,path.split('.').at(-1)!,config,this.controller.signal);
-          previewBytes+=item.input.length+item.encoded.bytes.length;
-        }catch(e){item.reason=String(e);}
+          previewBytes+=item.encoded.bytes.length;
+          item.input=new Uint8Array(); // Original is re-read and fingerprint-checked only when previewed or committed.
+        }catch(e){item.reason=String(e);item.outcome=e instanceof ProtectedMedia?'protected':'failed';}
         if(!item.encoded)item.input=new Uint8Array();
         result.push(item);onProgress?.(item);
       }return result;
     }finally{this.busy=false;this.controller=undefined;}
+  }
+  async original(item:Prepared):Promise<Uint8Array>{
+    const bytes=await this.store.read(item.path);
+    if(await hash(bytes)!==item.fingerprint)throw new Error('Input changed after preview');
+    return bytes;
   }
   private journalPath(id:string,c:Config):string{return safePath(String(c['storage.reportDirectory'])+'/'+id+'.json',true);}
   private async findHistory(path:string,c:Config):Promise<Journal[]>{
@@ -105,12 +111,12 @@ export class BatchService {
         }
         try{
           for(const {item,journal}of jobs){
-            if(await hash(await this.store.read(item.path))!==item.fingerprint)throw new Error('Input changed after preview');
+            const original=await this.original(item);
             await this.log(journal,config);
             if(output==='replace'){
               journal.backup=safePath(String(config['storage.backupDirectory'])+'/'+journal.id+'/'+item.path,true);
-              await this.store.backup(journal.backup,item.input);
-              if(!equal(await this.store.read(journal.backup),item.input))throw new Error('Backup readback failed');
+              await this.store.backup(journal.backup,original);
+              if(!equal(await this.store.read(journal.backup),original))throw new Error('Backup readback failed');
               journal.state='backed-up';await this.log(journal,config);
             }
           }

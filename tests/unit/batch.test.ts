@@ -60,3 +60,12 @@ it('batch resolves frozen per-media encoding preferences and rejects incomplete 
   await m.batch.prepare([i.path],defaults(),undefined,()=>({...defaults(),'compression.jpegQuality':70}));expect(m.compressor.encode).toHaveBeenCalledWith(i.input,'png',expect.objectContaining({'compression.jpegQuality':70}),expect.any(AbortSignal));
   i.group='group';await expect(m.batch.commit([i],defaults())).rejects.toThrow('Incomplete Apple');
 });
+
+it('large batches release original bytes and re-read a verified original for replacement',async()=>{
+  const m=memory(),i=await item();m.compressor.encode=vi.fn(async()=>i.encoded!)as Compressor['encode'];
+  const input=new Uint8Array(700000).fill(9);for(let n=0;n<6;n++)m.files.set('photo'+n+'.png',input.slice());
+  const c={...defaults(),'performance.cacheMiB':1,'performance.maxInputMiB':1};
+  const prepared=await m.batch.prepare([...m.files.keys()],c);expect(prepared.every(p=>p.encoded&&p.input.length===0&&p.inputBytes===input.length)).toBe(true);
+  const logs=await m.batch.commit([prepared[0]!],{...c,'compression.output':'replace'});
+  expect(logs[0]?.state).toBe('committed');expect(m.files.get(logs[0]!.backup!)).toEqual(input);
+});

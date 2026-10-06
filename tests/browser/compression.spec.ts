@@ -125,3 +125,13 @@ test('last-frame duration restoration preserves every frame time and audio sampl
     const repaired=h.restoreMotionEndTime(source,output);await h.validateVideoPreservation(source,repaired);await h.engine.validate(repaired);h.engine.destroy();return {rejected,tracks:h.tracks(repaired).length};
   });expect(result).toEqual({rejected:true,tracks:2});
 });
+
+test('motion movie clocks keep sub-millisecond duration and preserve audio while restoring the final frame',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,source=new Uint8Array(await(await fetch('/dist/fixtures/clock-motion.mp4')).arrayBuffer());
+    const timing=h.motionMuxTiming(source);
+    const output=await h.engine.encode(source,'mp4',['-v','error','-noautorotate','-i','$INPUT','-map','0','-c','copy','-c:v','libx264','-crf','30','-fps_mode','passthrough','-enc_time_base:v','-1',...timing,'$OUTPUT']);
+    const repaired=h.restoreMotionEndTime(source,output);await h.validateVideoPreservation(source,repaired);await h.engine.validate(repaired);h.engine.destroy();return {timing,tracks:h.tracks(repaired).length};
+  });expect(result).toEqual({timing:['-movie_timescale','10000','-video_track_timescale','90000'],tracks:2});
+});

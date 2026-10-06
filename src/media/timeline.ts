@@ -12,6 +12,14 @@ function withDuration(b:Uint8Array,h:Box,type:'mvhd'|'mdhd'|'tkhd',value:number)
   const out=b.slice(h.start,h.end),wide=b[h.payload]===1,at=h.payload-h.start+(type==='tkhd'?(wide?28:20):(wide?24:16)),view=new DataView(out.buffer);
   if(wide)view.setBigUint64(at,BigInt(value));else{if(value>0xffffffff)throw new Error('Timeline exceeds header width');view.setUint32(at,value);}return out;
 }
+/** Keep MP4 movie and video clocks representable before the muxer rounds them. */
+export function motionMuxTiming(original:Uint8Array):string[]{
+  const moov=boxes(original).find(v=>v.type==='moov');if(!moov)throw new Error('Missing movie clock');
+  const header=child(original,moov,'mvhd'),scale=u32(original,header.payload+(original[header.payload]===1?20:12));
+  const video=tracks(original).filter(t=>t.kind==='vide');
+  if(video.length!==1||![scale,video[0]!.timescale].every(v=>Number.isSafeInteger(v)&&v>0&&v<=0x7fffffff))throw new Error('Unsupported movie clock');
+  return ['-movie_timescale',String(scale),'-video_track_timescale',String(video[0]!.timescale)];
+}
 /** Restore the source's exact final-frame duration after reencode. All frame
  * presentation times must already match. Never stretch frames or audio. */
 export function restoreMotionEndTime(original:Uint8Array,encoded:Uint8Array):Uint8Array{
