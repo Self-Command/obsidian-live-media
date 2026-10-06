@@ -3,7 +3,7 @@ import {hash, equal} from '../media/bytes';
 import {safePath, type Config} from '../settings/model';
 import {Compressor, ProtectedMedia, type Encoded} from './encode';
 import {applePhotoId} from '../media/exif';
-import {probe} from '../media/probe';
+import {probe,type MediaProbe} from '../media/probe';
 export interface Store {
   read(path:string):Promise<Uint8Array>;
   exists(path:string):Promise<boolean>;
@@ -53,7 +53,7 @@ export class BatchService {
             const encoded=await this.compressor.encodeApple(item.input,movie,config,this.controller.signal);const group=crypto.randomUUID();item.group=group;
             const photoProbe=probe(item.input);
             item.encoded={bytes:encoded.photo,before:photoProbe,after:photoProbe,backend:'wasm',warnings:['Trusted Apple media group; static photo unchanged.']};
-            const movieProbe={format:'mov',live:true,hdr:false,protected:[],capability:'play-only'}as const;
+            const movieProbe:MediaProbe={format:'mov',live:true,hdr:false,protected:[],capability:'play-only'};
             const companion:Prepared={path:moviePath,input:movie,fingerprint:await hash(movie),settingsHash,group,encoded:{bytes:encoded.movie,before:movieProbe,after:movieProbe,backend:'wasm',warnings:['Apple metadata/audio/timed samples verified; phone recognition still needs device acceptance.']}};
             result.push(companion);onProgress?.(companion);previewBytes+=movie.length+encoded.movie.length;
             processed.add(moviePath);

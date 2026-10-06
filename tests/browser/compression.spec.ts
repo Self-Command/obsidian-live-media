@@ -13,6 +13,12 @@ test('real SDR and HDR motion files preserve decode, cover time, audio, frames a
     const compressor=new h.Compressor(e);
     const compressed=await compressor.encode(motion,'jpg',c,new AbortController().signal);
     const p=h.probe(compressed.bytes);await e.validate(compressed.bytes.slice(p.videoStart));
+    const sdrModes=[];
+    for(const mode of ['photo-only','photo-and-video']){
+      const rewritten=await compressor.encode(motion,'jpg',{...c,'compression.liveMode':mode},new AbortController().signal);
+      const probe=h.probe(rewritten.bytes);await e.validate(rewritten.bytes.slice(0,probe.videoStart));await e.validate(rewritten.bytes.slice(probe.videoStart));
+      await h.validateVideoPreservation(video,rewritten.bytes.slice(probe.videoStart));sdrModes.push(probe.live&&probe.timestamp==='500000');
+    }
     const hdr=await e.run('hdr-fixture',{});const hdrMotion=h.addMotionToHdr(hdr,video,'500000');
     const hdrBefore=h.mpfPictures(hdrMotion.slice(0,h.probe(hdrMotion).videoStart));
     c['compression.liveMode']='photo-and-video';
@@ -26,10 +32,23 @@ test('real SDR and HDR motion files preserve decode, cover time, audio, frames a
     const hdrValid=await e.run('hdr-probe',{input:hdrOutput.bytes.slice(0,hdrAfter.videoStart)});
     await h.validateVideoPreservation(video,compressed.bytes.slice(p.videoStart));
     const sourceTracks=h.tracks(video),outputTracks=h.tracks(compressed.bytes.slice(p.videoStart));
-    e.destroy();return {live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
+    e.destroy();return {sdrModes,live:p.live,time:p.timestamp,smaller:compressed.bytes.length<motion.length,hdr:hdrAfter.hdr,hdrValid,hdrTime:hdrAfter.timestamp,frames:sourceTracks.find((t:any)=>t.kind==='vide').samples.length,audio:outputTracks.some((t:any)=>t.kind==='soun'),hdrPictures:hdrBefore.pictures.length};
   });
   expect(result.live).toBe(true);expect(result.time).toBe('500000');expect(result.smaller).toBe(true);
+  expect(result.sdrModes).toEqual([true,true]);
   expect(result.hdr).toBe(true);expect(result.hdrValid).toBe(1);expect(result.hdrTime).toBe('500000');expect(result.frames).toBe(32);expect(result.audio).toBe(true);expect(result.hdrPictures).toBe(2);
+});
+test('VFR frame timestamps remain exact or protectively reject without any write',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,e=h.engine;
+    const source=new Uint8Array(await(await fetch('/dist/fixtures/vfr-motion.mp4')).arrayBuffer());
+    const output=await e.encode(source,'mp4',['-v','error','-i','$INPUT','-map','0','-c','copy','-c:v','libx264','-crf','30','-fps_mode','passthrough','-enc_time_base:v','-1','$OUTPUT']);
+    await e.validate(output);let protectedReason='';try{await h.validateVideoPreservation(source,output);}catch(e){protectedReason=String(e);}
+    e.destroy();return {protectedReason,frames:h.tracks(source)[0].samples.length,outFrames:h.tracks(output)[0].samples.length};
+  });
+  expect(result.frames).toBeGreaterThan(30);
+  if(result.protectedReason)expect(result.protectedReason).toMatch(/Frame presentation time|duration/);else expect(result.outFrames).toBe(result.frames);
 });
 test('lossless PNG preserves decoded RGBA; animated and unknown resources are protected',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
