@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-import {Component,TFile,type App} from 'obsidian';
+import {MarkdownRenderChild,TFile,type App} from 'obsidian';
 import type {SettingsModel} from '../settings/model';
 import type {ReferenceIndex} from '../references/vault';
 import {probe} from '../media/probe';
@@ -24,11 +24,11 @@ export class HostManager {
   remember(path:string):void {this.previewed.add(path);if(this.model.effective()['auto.remember']==='persistent'){this.model.data.previewed=[...this.previewed].slice(-10000);this.save();}}
   destroy():void {for(const s of [...this.sessions])s.destroy();this.coordinator.destroy();this.cache.clear();}
 }
-export class HostSession extends Component {
+export class HostSession extends MarkdownRenderChild {
   private observer?:MutationObserver;private visibility?:IntersectionObserver;
   private photos=new Map<HTMLImageElement,{photo:Photo;path:string}>();private waiting=new Set<HTMLImageElement>();private generation=0;private closed=false;
   private inflight=0;private queue:Array<()=>Promise<void>>=[];
-  constructor(private manager:HostManager,private root:HTMLElement,private source:string,private kind:'reading'|'preview'){super();}
+  constructor(private manager:HostManager,private root:HTMLElement,private source:string,private kind:'reading'|'preview'){super(root);}
   start():void {
     this.load();this.scan();
     this.observer=new MutationObserver(()=>{queueMicrotask(()=>{if(!this.closed)this.scan();});});
