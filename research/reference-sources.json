@@ -1,0 +1,86 @@
+[
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "LICENSE",
+    "sha256": "f484a987be2976307f4b4137474e94415b993f124cb6710fd0460e8bf20f9b47",
+    "lines": 21,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/LICENSE"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "README.md",
+    "sha256": "ba397f924e180ad393d7aaf22db1a286e895f7e1120eea1a8fccb97b4f1cc6bc",
+    "lines": 133,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/README.md"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "manifest.json",
+    "sha256": "0e07ac9a5ceb0ba24d54b6dca3f6ecf5c0241312f78e114e590ee13ce824d94f",
+    "lines": 10,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/manifest.json"
+  },
+  {
+    "repo": "haivri/obsidian-simple-gallery",
+    "commit": "1d3d9cead604dc27dec4788cae8022e981856221",
+    "path": "LICENSE",
+    "sha256": "13bdd0f2f6930c2eae76787d988fc2c986e4b47c2260d32b979710b615f75b87",
+    "lines": 21,
+    "url": "https://github.com/haivri/obsidian-simple-gallery/blob/1d3d9cead604dc27dec4788cae8022e981856221/LICENSE"
+  },
+  {
+    "repo": "haivri/obsidian-simple-gallery",
+    "commit": "1d3d9cead604dc27dec4788cae8022e981856221",
+    "path": "README.md",
+    "sha256": "edec7db3c71637526cfa81aaeca6d7cc650c254af2e58ed0e5142716873b7016",
+    "lines": 417,
+    "url": "https://github.com/haivri/obsidian-simple-gallery/blob/1d3d9cead604dc27dec4788cae8022e981856221/README.md"
+  },
+  {
+    "repo": "haivri/obsidian-simple-gallery",
+    "commit": "1d3d9cead604dc27dec4788cae8022e981856221",
+    "path": "manifest.json",
+    "sha256": "2c17d6b5f7e9cf91c1e0e0700f77b57bfafd1433c4ec1dcf17612f3060d1690c",
+    "lines": 10,
+    "url": "https://github.com/haivri/obsidian-simple-gallery/blob/1d3d9cead604dc27dec4788cae8022e981856221/manifest.json"
+  },
+  {
+    "repo": "haivri/obsidian-simple-gallery",
+    "commit": "1d3d9cead604dc27dec4788cae8022e981856221",
+    "path": "src/main.ts",
+    "sha256": "c9b6a0d8e7d4113f16fed16eb207e623606ef4e2b7928fb4b90b4850408007b5",
+    "lines": 2003,
+    "url": "https://github.com/haivri/obsidian-simple-gallery/blob/1d3d9cead604dc27dec4788cae8022e981856221/src/main.ts"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "lib/livePhoto.ts",
+    "lines": 117,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/lib/livePhoto.ts"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "lib/types.ts",
+    "lines": 33,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/lib/types.ts"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "lib/utils.ts",
+    "lines": 68,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/lib/utils.ts"
+  },
+  {
+    "repo": "ryne6/obsidian-live-photo",
+    "commit": "6fd83114e089f7c535353f872098daf6f4011def",
+    "path": "main.ts",
+    "lines": 210,
+    "url": "https://github.com/ryne6/obsidian-live-photo/blob/6fd83114e089f7c535353f872098daf6f4011def/main.ts"
+  }
+]

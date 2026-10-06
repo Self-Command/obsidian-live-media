@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.cache/
+fixtures/private/
+research/*.private.json
+research/upstream/
+reports/*.private.json
+*.log
+build/
+downloads/
+artifacts/
+reports/runtime-private/
+codecs/generated/
+playwright-report/
+test-results/
+fixtures/generated/
