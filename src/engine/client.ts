@@ -23,11 +23,11 @@ export class OfflineEngine {
       if (epoch !== this.epoch) throw new Error('Engine load cancelled');
       const url = (b: ArrayBuffer) => {const u = URL.createObjectURL(new Blob([b], {type: 'text/javascript'})); this.urls.push(u); return u;};
       this.worker = new Worker(url(workerCode!));
-      this.worker.onmessage = ({data}: MessageEvent<{id: number; result?: unknown; error?: string}>) => {
+      this.worker.onmessage = ({data}: MessageEvent<{id: number; result?: unknown; error?: string; discard?: boolean}>) => {
         const task = this.pending.get(data.id);
         if (!task) return;
         clearTimeout(task.timer); this.pending.delete(data.id);
-        if (data.error) task.reject(new Error(data.error)); else task.resolve(data.result);
+        if (data.error) {const error=new Error(data.error);task.reject(error);if(data.discard)this.destroy(error);} else task.resolve(data.result);
       };
       this.worker.onerror = () => this.destroy(new Error('Offline worker failed'));
       await this.request('load', {coreURL: url(core!), wasm, hdrURL: url(hdrCode!), hdrWasm});

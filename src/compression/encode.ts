@@ -159,7 +159,12 @@ export class Compressor {
       const hdrRoute=before.hdr&&(!before.live||c['compression.liveMode']!=='video-only');
       const backendName=hdrRoute?(before.live&&c['compression.backend']==='native'?'native-video+wasm-hdr':'wasm-hdr'):c['compression.backend']==='native'?'native':'wasm';
       return {bytes,before,after,backend:backendName,warnings};
-    }finally{signal.removeEventListener('abort',cancel);}
+    }finally{
+      signal.removeEventListener('abort',cancel);
+      // One media item owns a codec instance. End the lifetime here so a large
+      // photo cannot leave its peak heap or codec buffers in the next item.
+      if(!intermediate){backend.destroy();if(backend!==this.engine)this.engine.destroy();}
+    }
   }
   async encodeApple(photo:Uint8Array,movie:Uint8Array,c:Config,signal:AbortSignal):Promise<{photo:Uint8Array;movie:Uint8Array}>{
     if(!trustedApplePair(photo,movie))throw new ProtectedMedia('Apple pair identity or still-image-time track is missing');
@@ -182,6 +187,6 @@ export class Compressor {
       if(!trustedApplePair(photo,output))throw new Error('Output Apple pair no longer trusted');
       if(output.length>=movie.length||(1-output.length/movie.length)*100<Number(c['compression.minSavingPercent']))throw new ProtectedMedia('Apple movie does not meet savings threshold');
       return {photo:photo.slice(),movie:output};
-    }finally{signal.removeEventListener('abort',cancel);}
+    }finally{signal.removeEventListener('abort',cancel);backend.destroy();if(backend!==this.engine)this.engine.destroy();}
   }
 }

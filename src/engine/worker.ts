@@ -71,7 +71,7 @@ scope.onmessage = async (event) => {
         const file='verify.'+ext;tail='';core.FS.writeFile(file,input);
         try {
           core.setTimeout(120000);
-          core.exec('-v', 'error', '-i', file, '-map', '0:v:0', '-map', '0:a?', '-c:v', 'rawvideo', '-c:a', 'pcm_s16le', '-f', 'null', '-');
+          core.exec('-v', 'error', '-noautorotate', '-threads', '1', '-filter_threads', '1', '-i', file, '-map', '0:v:0', '-map', '0:a?', '-c:v', 'wrapped_avframe', '-c:a', 'pcm_s16le', '-f', 'null', '-');
           if (core.ret !== 0) throw new Error('Full video/image decode failed: '+tail);
           result = true;
         } finally {core.reset(); core.FS.unlink(file);}
@@ -100,5 +100,9 @@ scope.onmessage = async (event) => {
       } else throw new Error('Unknown engine operation');
     }
     scope.postMessage({id, result}, result instanceof Uint8Array ? [result.buffer as ArrayBuffer] : []);
-  } catch (error) {scope.postMessage({id, error: op + ': ' + String(error) + (error instanceof Error ? '\n' + error.stack : '')});}
+  } catch (error) {
+    // Discard this instance after a failed operation. reset() only resets return
+    // and timeout flags; it cannot reclaim all codec state after a failed run.
+    scope.postMessage({id, error: op + ': ' + String(error) + (error instanceof Error ? '\n' + error.stack : ''), discard: true});
+  }
 };

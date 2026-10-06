@@ -30,3 +30,30 @@ test('offline FFmpeg + UltraHDR load, decode, encode, cancel and reload', async 
   expect(result.colorError).toBeGreaterThanOrEqual(0);expect(result.colorError).toBeLessThanOrEqual(.1);
   expect(result.cancelledLoad).toBe(true);
 });
+
+test('failed codec command discards its worker and the next valid operation starts clean',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,e=h.engine;let failed=false;
+    try{await e.encode(Uint8Array.of(1,2,3,4),'jpg',['-v','error','-i','$INPUT','$OUTPUT']);}catch{failed=true;}
+    const discarded=e.worker===undefined;
+    const png=await e.encode(new Uint8Array(),'png',['-v','error','-f','lavfi','-i','color=red:s=128x128','-frames:v','1','$OUTPUT']);await e.validate(png);e.destroy();
+    return {failed,discarded,bytes:png.length};
+  });expect(result.failed).toBe(true);expect(result.discarded).toBe(true);expect(result.bytes).toBeGreaterThan(50);
+});
+test('full-resolution JPEG validation and repeated compression release each media worker',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
+  const result=await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,e=h.engine,c=h.defaults();
+    const canvas=document.createElement('canvas');canvas.width=3072;canvas.height=4096;
+    const ctx=canvas.getContext('2d')!,gradient=ctx.createLinearGradient(0,0,3072,4096);gradient.addColorStop(0,'#c86542');gradient.addColorStop(.5,'#5daa7c');gradient.addColorStop(1,'#527fb9');ctx.fillStyle=gradient;ctx.fillRect(0,0,3072,4096);
+    const blob=await new Promise<Blob>(resolve=>canvas.toBlob(b=>resolve(b!),'image/jpeg',1));
+    const input=h.addIcc(new Uint8Array(await blob.arrayBuffer()),h.profile());await e.validate(input);
+    const checks=[];
+    for(let i=0;i<6;i++){
+      const encoded=await new h.Compressor(e).encode(input,'jpg',c,new AbortController().signal);
+      checks.push(encoded.after.width===3072&&encoded.after.height===4096&&encoded.bytes.length<input.length&&e.worker===undefined);
+    }
+    canvas.width=canvas.height=0;return checks;
+  });expect(result).toEqual([true,true,true,true,true,true]);
+});
