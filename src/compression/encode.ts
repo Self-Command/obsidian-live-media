@@ -35,7 +35,8 @@ export class Compressor {
         const args=['-v','error','-noautorotate','-i','$INPUT','-map','0','-map_metadata','0'];
         if(lossless)args.push('-c','copy');
         else{
-          args.push('-c','copy','-c:v','libx264','-crf',String(c['compression.ffmpegCrf']),'-preset',c['performance.encodePriority']==='low'?'veryfast':'medium','-fps_mode','passthrough','-enc_time_base:v','-1');
+          const crf=c['compression.videoQuality']==='high'?18:c['compression.videoQuality']==='balanced'?23:Number(c['compression.ffmpegCrf']);
+          args.push('-c','copy','-c:v','libx264','-crf',String(crf),'-preset',c['performance.encodePriority']==='low'?'veryfast':'medium','-fps_mode','passthrough','-enc_time_base:v','-1');
           if(c['compression.resizeVideo'])args.push('-vf',`scale='min(${c['compression.maxVideoEdge']},iw)':'min(${c['compression.maxVideoEdge']},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2`);
         }
         args.push('-movflags','+faststart','$OUTPUT');

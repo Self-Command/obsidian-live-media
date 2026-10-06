@@ -31,7 +31,8 @@ export function sourceReferences(body: string, source: string, options: {native:
         for(const line of code.split('\n')){
           const item=line.match(/^\s*-\s+(.+?)\s*$/);
           if(item){const found=standard(item[1]!,source,off,rule.evidence,rule.id);result.push(...found);
-            if(!found.length&&!/^!|^\[|^#/.test(item[1]!))result.push({link:item[1]!,source,evidence:rule.evidence,origin:rule.id,offset:off});}
+            if(!found.length){const wiki=item[1]!.match(/^\[\[([^\]]+)\]\]$/);if(wiki)result.push({link:wiki[1]!.split('|')[0]!,source,evidence:rule.evidence,origin:rule.id,offset:off});
+              else if(!/^!|^\[|^#/.test(item[1]!))result.push({link:item[1]!,source,evidence:rule.evidence,origin:rule.id,offset:off});}}
           off+=line.length+1;
         }
       } else if(rule.structure==='field'){

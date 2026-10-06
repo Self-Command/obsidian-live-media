@@ -65,7 +65,7 @@ export function tracks(b: Uint8Array): Track[] {
   });
 }
 function equalTime(a: number,scaleA:number,b:number,scaleB:number): boolean {return BigInt(a)*BigInt(scaleB)===BigInt(b)*BigInt(scaleA);}
-export async function validateVideoPreservation(before: Uint8Array, after: Uint8Array, resize=false): Promise<void> {
+export async function validateVideoPreservation(before: Uint8Array, after: Uint8Array, resize=false,allowVerifiedApple=false): Promise<void> {
   const old=tracks(before),next=tracks(after);
   if(old.length!==next.length)throw new Error('Track count changed');
   for(let i=0;i<old.length;i++){
@@ -85,5 +85,5 @@ export async function validateVideoPreservation(before: Uint8Array, after: Uint8
   }
   // File-level proprietary metadata is protected until its container writer is proven.
   const protectedText=ascii(before).match(/com\.apple\.quicktime\.[\w.-]+/g);
-  if(protectedText?.length)throw new Error('Apple QuickTime identity requires verified pair writer');
+  if(protectedText?.length&&!allowVerifiedApple)throw new Error('Apple QuickTime identity requires verified pair writer');
 }

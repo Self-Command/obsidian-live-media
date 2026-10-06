@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import {Modal, PluginSettingTab, Setting, Notice, type App, type Plugin} from 'obsidian';
 import {schema, defaults, validatePatch, validateCombined, type SettingsModel, type Config, type Field, type Value} from '../settings/model';
+import {language,translate,fieldName} from './i18n';
 const groups:Record<string,string>={render:'视图 · Views',badge:'LIVE 标识 · Badge',manual:'手动播放 · Manual playback',gesture:'手势 · Gestures',host:'查看器兼容 · Host',accessibility:'无障碍 · Accessibility',appearance:'外观 · Appearance',auto:'自动预览 · Automatic preview',detect:'检测 · Detection',scope:'扫描范围 · Scope',pairing:'照片配对 · Pairing',compatibility:'插件兼容 · Compatibility',network:'联网 · Network',compression:'压缩 · Compression',performance:'性能 · Performance',storage:'副本与恢复 · Storage',native:'本机后端 · Native',diagnostics:'诊断 · Diagnostics',settings:'偏好 · Preferences'};
 export function dependency(field:Field,c:Config):string|undefined {
   const key=field.key;
   if(key==='compression.maxImageEdge'&&!c['compression.resizeImage'])return '先开启图片缩放';
   if(key==='compression.maxVideoEdge'&&!c['compression.resizeVideo'])return '先开启视频缩放';
+  if(key==='compression.ffmpegCrf'&&c['compression.videoQuality']!=='custom')return '仅自定义视频质量生效';
   if(key==='storage.backupDays'&&c['storage.backupRetention']!=='manual-days')return '仅主动按天数检查时生效';
   if(key.startsWith('auto.hover')&&key!=='auto.hover'&&!c['auto.hover'])return '先开启悬停预览';
   if(key==='performance.marginPx'&&c['performance.preload']!=='near-visible')return '仅近可见预加载生效';
@@ -47,7 +49,7 @@ export class LiveSettingsTab extends PluginSettingTab {
       d.addOption('','选择预设');for(const k of ['balanced','high','lossless',...Object.keys(this.model.data.presets)])d.addOption(k,k);
       d.onChange(v=>{if(!v)return;const custom=this.model.data.presets[v];
         if(custom)this.model.data.global={...this.model.data.global,...custom};
-        else{this.model.set('compression.preset',v);this.model.set('compression.jpegQuality',v==='high'?95:85);this.model.set('compression.webpQuality',v==='high'?95:85);this.model.set('compression.ffmpegCrf',v==='high'?18:23);this.model.set('compression.allowLossy',v!=='lossless');}
+        else{this.model.set('compression.preset',v);this.model.set('compression.jpegQuality',v==='high'?95:85);this.model.set('compression.webpQuality',v==='high'?95:85);this.model.set('compression.ffmpegCrf',v==='high'?18:23);this.model.set('compression.videoQuality',v==='high'?'high':'balanced');this.model.set('compression.allowLossy',v!=='lossless');}
         void this.persist();});
     }).addButton(b=>b.setButtonText('保存为预设').onClick(()=>new JsonModal(this.app,'预设名称','my-preset',async name=>{
       if(!/^[\w-]{1,64}$/.test(name))throw new Error('Use 1–64 letters/numbers/dashes');this.model.data.presets[name]={...this.model.data.global};await this.persist();
@@ -72,10 +74,11 @@ export class LiveSettingsTab extends PluginSettingTab {
     for(const field of schema){
       if(!this.advanced&&!basic.has(field.group)&&!this.search)continue;
       if(this.search&&!`${field.key} ${field.description} ${field.spec}`.toLowerCase().includes(this.search.toLowerCase()))continue;
-      if(group!==field.group){group=field.group;el.createEl('h3',{text:groups[group]??group});
+      if(group!==field.group){group=field.group;const heading=groups[group]??group;el.createEl('h3',{text:language(c)==='en'?(heading.split(' · ')[1]??heading):heading});
         new Setting(el).setName('恢复该组默认值').addButton(b=>b.setButtonText('重置组').onClick(()=>{for(const f of schema.filter(f=>f.group===field.group))delete this.model.data.global[f.key];void this.persist();}));}
-      const blocked=dependency(field,c);const row=new Setting(el).setName(field.key).setDesc(`${field.description} · ${field.spec} · 默认 ${JSON.stringify(field.default)}${blocked?' · '+blocked:''}`);
-      const set=(v:unknown)=>{try{this.model.set(field.key,v);void this.save().then(()=>this.changed());}catch(e){new Notice(String(e));}};
+      const blocked=dependency(field,c);const row=new Setting(el).setName(language(c)==='en'?fieldName(field.key):field.key)
+        .setDesc(language(c)==='en'?`${fieldName(field.key)}. Default: ${JSON.stringify(field.default)}${field.options?' · Options: '+field.options.join(', '):''}${field.min!==undefined?' · Range: '+field.min+'–'+field.max:''}${blocked?' · Unavailable: dependency or runtime capability is not satisfied.':''}`:`${field.description} · ${field.spec} · 默认 ${JSON.stringify(field.default)}${blocked?' · '+blocked:''}`);
+      const set=(v:unknown)=>{try{this.model.set(field.key,v);void this.save().then(()=>{this.changed();if(field.key==='settings.language')this.display();});}catch(e){new Notice(String(e));}};
       const val=c[field.key];
       if(field.kind==='boolean')row.addToggle(t=>t.setValue(!!val).setDisabled(!!blocked).onChange(set));
       else if(field.kind==='enum')row.addDropdown(d=>{for(const option of field.options??[])d.addOption(option,option);d.setValue(String(val)).setDisabled(!!blocked).onChange(set);});

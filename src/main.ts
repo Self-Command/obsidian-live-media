@@ -12,11 +12,14 @@ import {VaultStore} from './compression/obsidian-store';
 import {ScanModal,RecoveryModal} from './ui/batch';
 import {probe} from './media/probe';
 import type {ReferenceProvider} from './references/source';
+import {Diagnostics} from './diagnostics';
 export default class LiveMedia extends Plugin {
   engine = new OfflineEngine();
   private model!:SettingsModel;private references!:ReferenceIndex;private hosts!:HostManager;private batch!:BatchService;
   private lastNotices=new Map<string,number>();private saveTimer?:ReturnType<typeof setTimeout>;
+  private diagnostics?:Diagnostics;
   private notify=(message:string):void=>{
+    this.diagnostics?.record('error','runtime-media-warning');
     if(this.model?.effective()['diagnostics.notices']==='none')return;
     if(Date.now()-(this.lastNotices.get(message)??0)<5000)return;this.lastNotices.set(message,Date.now());new Notice(message);
   };
@@ -25,7 +28,9 @@ export default class LiveMedia extends Plugin {
     const platform=Platform.isIosApp?'ios':Platform.isAndroidApp?'android':'desktop';
     this.model=new SettingsModel(await this.loadData(),platform);this.references=new ReferenceIndex(this.app,()=>this.model.effective());
     this.hosts=new HostManager(this.app,this.model,this.references,this.notify,()=>{clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>{void this.save();},300);});
-    this.batch=new BatchService(new VaultStore(this.app),new Compressor(this.engine,()=>{
+    const store=new VaultStore(this.app);this.diagnostics=new Diagnostics(store,()=>this.model.effective());
+    this.diagnostics.record('verbose','plugin-loaded');
+    this.batch=new BatchService(store,new Compressor(this.engine,()=>{
       const c=this.model.effective();const path=String(c['native.executable']);
       if(!Platform.isDesktopApp||!c['native.enabled']||localStorage.getItem(this.nativeKey())!==path)return undefined;
       return new NativeEngine(path,()=>localStorage.getItem(this.nativeKey())===path);
@@ -39,9 +44,11 @@ export default class LiveMedia extends Plugin {
       destroy():void{this.session?.destroy();}
     }));
     this.registerEvent(this.app.vault.on('modify',f=>this.hosts.invalidate(f.path)));
-    this.registerEvent(this.app.vault.on('delete',f=>{this.hosts.invalidate(f.path);delete this.model.data.photos[f.path];}));
+    this.registerEvent(this.app.vault.on('create',()=>this.references.invalidate()));
+    this.registerEvent(this.app.vault.on('delete',f=>{this.references.invalidate();this.hosts.invalidate(f.path);delete this.model.data.photos[f.path];}));
     this.registerEvent(this.app.vault.on('rename',(f,old)=>{
       this.hosts.invalidate(old);this.hosts.invalidate(f.path);
+      this.references.invalidate();
       if(this.model.data.photos[old]){this.model.data.photos[f.path]=this.model.data.photos[old]!;delete this.model.data.photos[old];}
       for(const p of (this.model.data.global['pairing.explicit']??[])as Array<{photo:string;video:string}>){if(p.photo===old)p.photo=f.path;if(p.video===old)p.video=f.path;}
       void this.save();
@@ -51,6 +58,7 @@ export default class LiveMedia extends Plugin {
     this.addCommand({id:'compress-vault',name:'检查并压缩全库图片 / Scan vault media',callback:()=>new ScanModal(this.app,this.references,this.batch,()=>({...this.model.effective(),'compression.defaultScope':'vault'})).open()});
     this.addCommand({id:'restore-originals',name:'检查日志并恢复原件 / Restore originals',callback:()=>new RecoveryModal(this.app,this.batch,this.model.effective()).open()});
     this.addCommand({id:'inspect-note-media',name:'检查当前文章媒体格式 / Inspect media',callback:()=>{void this.inspect();}});
+    this.addCommand({id:'export-diagnostics',name:'查看脱敏诊断 / View diagnostics',callback:()=>new JsonModal(this.app,'Live Media · Diagnostics',this.diagnostics!.report()).open()});
     this.addCommand({id:'stop-playback',name:'停止所有照片播放 / Stop playback',callback:()=>this.hosts.coordinator.stopAll()});
     this.addCommand({id:'authorize-native-engine',name:'授权本设备 FFmpeg / Authorize native FFmpeg',callback:()=>{
       if(!Platform.isDesktopApp){this.notify('Native backend is desktop only');return;}

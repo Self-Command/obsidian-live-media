@@ -5,6 +5,7 @@ import type {ReferenceIndex} from '../references/vault';
 import {probe} from '../media/probe';
 import {ByteCache} from './cache';
 import {Photo,PlaybackCoordinator} from './photo';
+import {trustedApplePair} from '../media/apple';
 export class HostManager {
   cache:ByteCache;coordinator:PlaybackCoordinator;private sessions=new Set<HostSession>();private previewed=new Set<string>();
   constructor(public app:App,public model:SettingsModel,public index:ReferenceIndex,public notice:(m:string)=>void,public save:()=>void){
@@ -63,9 +64,19 @@ export class HostSession extends MarkdownRenderChild {
           else {
             const pairs=settings['pairing.explicit']as Array<{photo:string;video:string}>;const pair=pairs.find(pair=>pair.photo===file.path);
             if(pair){const target=this.manager.app.vault.getAbstractFileByPath(pair.video);if(target instanceof TFile&&target.stat.size<Number(settings['performance.maxInputMiB'])*1048576)video=new Uint8Array(await this.manager.app.vault.readBinary(target));}
+            if(!video&&settings['pairing.sameNameCandidates']&&['jpg','jpeg'].includes(file.extension.toLowerCase())){
+              const stem=file.path.slice(0,-file.extension.length);
+              for(const extension of ['mov','MOV','mp4','MP4']){
+                const target=this.manager.app.vault.getAbstractFileByPath(stem+extension);
+                if(target instanceof TFile&&target.stat.size<Number(settings['performance.maxInputMiB'])*1048576){
+                  const movie=new Uint8Array(await this.manager.app.vault.readBinary(target));
+                  if(trustedApplePair(bytes,movie)){video=movie;break;}
+                }
+              }
+            }
           }
           if(!video||this.closed||generation!==this.generation||!img.isConnected)return;
-          release=this.manager.cache.retain(key);url=URL.createObjectURL(new Blob([video.slice().buffer],{type:'video/mp4'}));
+          release=this.manager.cache.retain(key,Number(settings['performance.warmSeconds']));url=URL.createObjectURL(new Blob([video.slice().buffer],{type:'video/mp4'}));
           const finalURL=url,finalRelease=release;
           const photo=new Photo(img,url,()=>{
             const effective=this.manager.model.effective(file.path,noteOverrides);

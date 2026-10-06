@@ -5,5 +5,6 @@ import {Compressor} from '../../src/compression/encode';
 import {probe} from '../../src/media/probe';
 import {concat,jpegSegments,ascii} from '../../src/media/bytes';
 import {tracks,validateVideoPreservation} from '../../src/media/mp4';
+import {mpfPictures,addMotionToHdr} from '../../src/media/hdr';
 const engine = new OfflineEngine();
-Object.assign(window, {liveMediaHarness: {engine,Photo,PlaybackCoordinator,defaults,SettingsModel,schema,Compressor,probe,concat,jpegSegments,ascii,tracks,validateVideoPreservation}});
+Object.assign(window, {liveMediaHarness: {engine,Photo,PlaybackCoordinator,defaults,SettingsModel,schema,Compressor,probe,concat,jpegSegments,ascii,tracks,validateVideoPreservation,mpfPictures,addMotionToHdr}});

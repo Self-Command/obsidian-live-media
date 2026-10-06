@@ -6,9 +6,10 @@ test('photo layer never has controls; auto is muted, repeated clicks stop, drag 
     const h=(window as any).liveMediaHarness;const c=h.defaults();c['auto.mode']='off';
     const img=document.createElement('img');img.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"></svg>';img.style.width='128px';img.style.height='128px';document.body.append(img);
     const coord=new h.PlaybackCoordinator(()=>c);
-    const photo=new h.Photo(img,'blob:synthetic-placeholder',()=>c,coord,()=>false,()=>{},()=>{},()=>{});
+    const photo=new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>{});
     // Exercise interaction logic; codec decode is separately tested with actual encoded media.
     const video=document.querySelector('video')!;
+    video.removeAttribute('src');
     video.play=async()=>{};video.pause=()=>{};
     Object.assign(window,{testPhoto:{photo,c,img,video,coord}});
   });

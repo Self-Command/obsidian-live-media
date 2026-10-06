@@ -38,8 +38,8 @@ bash "$sources/ffmpeg-wasm/build/ffmpeg.sh" \
   --enable-protocol=file,pipe \
   --enable-demuxer=mov,image2,image2pipe,mjpeg,png_pipe,jpeg_pipe,webp_pipe \
   --enable-muxer=mp4,mov,image2,image2pipe,rawvideo,null,framehash \
-  --enable-decoder=h264,hevc,mjpeg,png,webp,aac,pcm_s16le \
-  --enable-encoder=libx264,mjpeg,png,libwebp,rawvideo,pcm_s16le \
+  --enable-decoder=h264,hevc,mjpeg,png,webp,aac,pcm_s16le,wrapped_avframe,rawvideo \
+  --enable-encoder=libx264,mjpeg,png,libwebp,rawvideo,pcm_s16le,wrapped_avframe \
   --enable-parser=h264,hevc,mjpeg,png,aac \
   --enable-bsf=extract_extradata,h264_mp4toannexb,hevc_mp4toannexb \
   --enable-indev=lavfi \

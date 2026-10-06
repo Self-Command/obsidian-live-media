@@ -5,6 +5,7 @@ import {jpegSegments,boxes,concat} from '../../src/media/bytes';
 import {probe} from '../../src/media/probe';
 import {replaceMotionVideo} from '../../src/media/motion';
 import {ByteCache} from '../../src/playback/cache';
+import {exifOrientation,minimalExif} from '../../src/media/exif';
 const utf=(s:string)=>new TextEncoder().encode(s);
 function box(type:string,payload:Uint8Array):Uint8Array{const b=new Uint8Array(8+payload.length);new DataView(b.buffer).setUint32(0,b.length);b.set(utf(type),4);b.set(payload,8);return b;}
 const video=concat(box('ftyp',utf('isom0000')),box('moov',new Uint8Array()),box('mdat',utf('placeholder-container-not-a-decode-fixture')));
@@ -63,4 +64,7 @@ describe('byte cache ownership and budgets',()=>{
   it('keeps retained entries, evicts idle entries and releases explicitly',()=>{
     const c=new ByteCache(10,2);c.put('a',new Uint8Array(6));const release=c.retain('a');c.put('b',new Uint8Array(6));expect(c.get('a')).toBeDefined();expect(c.get('b')).toBeUndefined();release();c.invalidate('a');expect(c.bytes).toBe(0);
   });
+});
+it('retains all eight EXIF orientations without optional private metadata',()=>{
+  for(let n=1;n<=8;n++){const data=concat(Uint8Array.of(255,216),minimalExif(n),Uint8Array.of(255,217));expect(exifOrientation(data)).toBe(n);}
 });

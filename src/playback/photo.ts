@@ -7,7 +7,10 @@ export class PlaybackCoordinator {
     const playing=[...this.photos].filter(p=>p.playing&&p!==photo);
     if(manual){for(const p of playing)p.stop();return true;}
     if(playing.some(p=>p.manual))return false;
-    return playing.length<Number(this.settings()['auto.concurrent']);
+    const c=this.settings();const memory=(performance as unknown as {memory?:{usedJSHeapSize:number;jsHeapSizeLimit:number}}).memory;
+    const constrained=memory&&memory.usedJSHeapSize>memory.jsHeapSizeLimit*.75;
+    if(constrained&&c['auto.lowResource']==='stop')return false;
+    return playing.length<(constrained?1:Number(c['auto.concurrent']));
   }
   stopAll():void {for(const p of this.photos)p.stop();}
   destroy():void {for(const p of [...this.photos])p.destroy();}
@@ -118,7 +121,7 @@ export class Photo {
       catch{this.stop();this.notice('Playback was blocked by this WebView');return;}
     }
     if(!this.playing)return;
-    const show=()=>{if(this.playing){this.video.style.opacity='1';this.img.style.opacity='0';this.layer.classList.add('is-playing');}};
+    const show=()=>{if(this.playing){this.video.style.opacity='1';this.layer.classList.add('is-playing');}};
     if('requestVideoFrameCallback'in this.video)this.video.requestVideoFrameCallback(show);else requestAnimationFrame(show);
     if(!manual){this.remember();if(c['auto.durationMs']!=='full')this.schedule(()=>{if(!this.manual)this.stop();},Number(c['auto.durationMs']));}
   }

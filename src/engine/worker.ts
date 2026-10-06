@@ -29,6 +29,7 @@ const scope = self as unknown as {
 let core: Core | undefined;
 let hdr: HdrCore | undefined;
 let initialized = false;
+let tail = '';
 scope.onmessage = async (event) => {
   const {id, op, data} = event.data as {id: number; op: string; data: Record<string, unknown>};
   try {
@@ -38,13 +39,14 @@ scope.onmessage = async (event) => {
       scope.importScripts(data.coreURL as string, data.hdrURL as string);
       const locator = btoa(JSON.stringify({wasmURL: 'data:application/wasm;base64,', workerURL: 'data:text/javascript,'}));
       core = await scope.createFFmpegCore({wasmBinary: data.wasm, mainScriptUrlOrBlob: String(data.coreURL) + '#' + locator});
-      core.setLogger(() => {});
+      core.setLogger(e => {tail=(tail+'\n'+e.message).slice(-2048);});
       hdr = await scope.createUltraHDR({wasmBinary: data.hdrWasm, noInitialRun: true});
       initialized = true;
       result = {ffmpeg: true, ultrahdr: true};
     } else {
       if (!core || !hdr) throw new Error('Engine not loaded');
       if (op === 'execute') {
+        tail='';
         const input = data.input as Uint8Array;
         const ext = String(data.extension);
         if (!/^[a-z0-9]{1,5}$/.test(ext)) throw new Error('Invalid extension');
@@ -55,7 +57,7 @@ scope.onmessage = async (event) => {
           const args = (data.args as string[]).map(a => a === '$INPUT' ? inFile : a === '$OUTPUT' ? outFile : a);
           core.setTimeout(120000);
           core.exec(...args);
-          if (core.ret !== 0) throw new Error('FFmpeg exit ' + core.ret);
+          if (core.ret !== 0) throw new Error('FFmpeg exit ' + core.ret + ': '+tail);
           core.reset();
           result = core.FS.readFile(outFile).slice();
         } finally {
@@ -66,7 +68,7 @@ scope.onmessage = async (event) => {
         core.FS.writeFile('verify.media', data.input as Uint8Array);
         try {
           core.setTimeout(120000);
-          core.exec('-v', 'error', '-i', 'verify.media', '-map', '0:v:0', '-f', 'null', '-');
+          core.exec('-v', 'error', '-i', 'verify.media', '-map', '0:v:0', '-c:v', 'rawvideo', '-f', 'null', '-');
           if (core.ret !== 0) throw new Error('Full video/image decode failed');
           result = true;
         } finally {core.reset(); core.FS.unlink('verify.media');}

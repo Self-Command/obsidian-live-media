@@ -20,23 +20,39 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - name: Restore exact codec build inputs
+        id: codec-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            codecs/generated
+            build/codec-sources
+          key: live-media-codecs-${{ runner.os }}-${{ hashFiles('codecs/**', 'scripts/build-codecs.sh', 'scripts/build-ffmpeg.sh') }}
       - name: Pinned Emscripten toolchain
+        if: steps.codec-cache.outputs.cache-hit != 'true'
         run: |
           git clone --quiet https://github.com/emscripten-core/emsdk.git build-emsdk
           git -C build-emsdk checkout --quiet 389a68bc35dcff7ebae4614e1615099dafda00d1
           build-emsdk/emsdk install 4.0.15
           build-emsdk/emsdk activate 4.0.15
       - name: Build offline codecs
+        if: steps.codec-cache.outputs.cache-hit != 'true'
         run: |
           source build-emsdk/emsdk_env.sh
           bash scripts/build-codecs.sh
       - name: Build pinned minimal FFmpeg core
+        if: steps.codec-cache.outputs.cache-hit != 'true'
         run: |
           build-emsdk/emsdk install 3.1.40
           build-emsdk/emsdk activate 3.1.40
           source build-emsdk/emsdk_env.sh
           bash scripts/build-ffmpeg.sh
       - run: npm run build
+      - name: Generate decodable public-domain codec fixtures
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          bash scripts/fixtures.sh
       - name: Collect codec source and licenses
         run: python3 scripts/source-archive.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
