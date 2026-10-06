@@ -1,6 +1,7 @@
 import {Plugin, Notice,Platform,TFile,editorInfoField} from 'obsidian';
 import {ViewPlugin,type EditorView} from '@codemirror/view';
 import {OfflineEngine} from './engine/client';
+import {NativeEngine} from './engine/native';
 import {SettingsModel} from './settings/model';
 import {LiveSettingsTab,JsonModal} from './ui/settings';
 import {ReferenceIndex} from './references/vault';
@@ -24,7 +25,11 @@ export default class LiveMedia extends Plugin {
     const platform=Platform.isIosApp?'ios':Platform.isAndroidApp?'android':'desktop';
     this.model=new SettingsModel(await this.loadData(),platform);this.references=new ReferenceIndex(this.app,()=>this.model.effective());
     this.hosts=new HostManager(this.app,this.model,this.references,this.notify,()=>{clearTimeout(this.saveTimer);this.saveTimer=setTimeout(()=>{void this.save();},300);});
-    this.batch=new BatchService(new VaultStore(this.app),new Compressor(this.engine));
+    this.batch=new BatchService(new VaultStore(this.app),new Compressor(this.engine,()=>{
+      const c=this.model.effective();const path=String(c['native.executable']);
+      if(!Platform.isDesktopApp||!c['native.enabled']||localStorage.getItem(this.nativeKey())!==path)return undefined;
+      return new NativeEngine(path,()=>localStorage.getItem(this.nativeKey())===path);
+    }));
     this.addSettingTab(new LiveSettingsTab(this.app,this,this.model,this.save,()=>this.hosts.settingsChanged()));
     this.registerMarkdownPostProcessor((el,ctx)=>{ctx.addChild(this.hosts.attach(el,ctx.sourcePath,'reading'));});
     const manager=this.hosts;
@@ -47,11 +52,17 @@ export default class LiveMedia extends Plugin {
     this.addCommand({id:'restore-originals',name:'检查日志并恢复原件 / Restore originals',callback:()=>new RecoveryModal(this.app,this.batch,this.model.effective()).open()});
     this.addCommand({id:'inspect-note-media',name:'检查当前文章媒体格式 / Inspect media',callback:()=>{void this.inspect();}});
     this.addCommand({id:'stop-playback',name:'停止所有照片播放 / Stop playback',callback:()=>this.hosts.coordinator.stopAll()});
+    this.addCommand({id:'authorize-native-engine',name:'授权本设备 FFmpeg / Authorize native FFmpeg',callback:()=>{
+      if(!Platform.isDesktopApp){this.notify('Native backend is desktop only');return;}
+      const path=String(this.model.effective()['native.executable']);if(!path){this.notify('Set the executable path first');return;}
+      new JsonModal(this.app,'仅本设备执行授权 / Local authorization',path+'\n确认允许 Live Media 以参数数组调用该程序。授权不写入同步设置。',async()=>{localStorage.setItem(this.nativeKey(),path);this.model.set('native.enabled',true);await this.save();}).open();
+    }});
     this.addCommand({id: 'offline-engine-check', name: 'Check offline engine', callback: () => {
       void this.engine.load().then(() => new Notice('Offline engines loaded')).catch(e => new Notice(String(e)));
     }});
   }
   registerReferenceProvider(provider:ReferenceProvider):()=>void{return this.references.register(provider);}
+  private nativeKey():string{return 'live-media-native:'+this.app.vault.getName();}
   private async inspect():Promise<void>{
     const file=this.app.workspace.getActiveFile();if(!file){this.notify('Open a note first');return;}
     const refs=await this.references.note(file,new AbortController().signal);const output=[];

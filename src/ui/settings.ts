@@ -12,7 +12,6 @@ export function dependency(field:Field,c:Config):string|undefined {
   if(key==='gesture.longPressMs'&&c['manual.gesture']!=='long-press')return '仅长按手势生效';
   if(key==='gesture.modifier'&&c['manual.gesture']!=='modified-click')return '仅组合键点击生效';
   if(key==='compression.targetVideoMbps')return 'WebCodecs 路线尚未通过时间与音轨保护门槛，不可用';
-  if(key.startsWith('native.'))return '本机后端授权与轨道保护尚待完成，不执行本机程序';
   if(key==='network.remote')return '候选版本只处理库内原件；不下载远端媒体';
   return undefined;
 }
