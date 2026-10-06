@@ -4,6 +4,9 @@
 #include <vector>
 #include <cstring>
 #include <string>
+#include <cmath>
+#include <cstdint>
+#include <algorithm>
 #include <emscripten/emscripten.h>
 static std::vector<unsigned char> output;
 static std::string last_error;
@@ -23,6 +26,30 @@ EMSCRIPTEN_KEEPALIVE int lm_probe(void* p, int n) {
   bool valid = ok(uhdr_dec_set_image(d, &image)) && ok(uhdr_dec_probe(d));
   if (valid) valid = ok(uhdr_decode(d));
   uhdr_release_decoder(d); return valid ? 1 : 0;
+}
+static float half_value(uint16_t bits) {
+  unsigned int sign=bits>>15,exponent=(bits>>10)&31,fraction=bits&1023;
+  float value=exponent==0?std::ldexp(float(fraction),-24):exponent==31?INFINITY:std::ldexp(float(1024+fraction),int(exponent)-25);
+  return sign?-value:value;
+}
+EMSCRIPTEN_KEEPALIVE double lm_compare(void* a,int an,void* b,int bn) {
+  auto first=uhdr_create_decoder(),second=uhdr_create_decoder();auto ai=input_image(a,an),bi=input_image(b,bn);
+  auto decode=[](auto* d,auto* image){return ok(uhdr_dec_set_image(d,image))&&ok(uhdr_dec_set_out_img_format(d,UHDR_IMG_FMT_64bppRGBAHalfFloat))&&ok(uhdr_dec_set_out_color_transfer(d,UHDR_CT_LINEAR))&&ok(uhdr_decode(d));};
+  double result=-1;
+  if(decode(first,&ai)&&decode(second,&bi)){
+    const auto x=uhdr_get_decoded_image(first),y=uhdr_get_decoded_image(second);
+    if(x->w==y->w&&x->h==y->h&&x->cg!=UHDR_CG_UNSPECIFIED&&x->cg==y->cg&&x->ct==y->ct){
+      double error=0,energy=0;bool finite=true;
+      for(unsigned int row=0;row<x->h;row++)for(unsigned int col=0;col<x->w;col++)for(unsigned int channel=0;channel<3;channel++){
+        const auto xv=half_value(((uint16_t*)x->planes[0])[row*x->stride[0]*4+col*4+channel]);
+        const auto yv=half_value(((uint16_t*)y->planes[0])[row*y->stride[0]*4+col*4+channel]);
+        if(!std::isfinite(xv)||!std::isfinite(yv)){finite=false;continue;}
+        error+=double(xv-yv)*(xv-yv);energy+=double(xv)*xv;
+      }
+      if(finite)result=std::sqrt(error/std::max(energy,1e-12));
+    }
+  }
+  uhdr_release_decoder(first);uhdr_release_decoder(second);return result;
 }
 EMSCRIPTEN_KEEPALIVE unsigned char* lm_reencode(void* p, int n, int quality) {
   output.clear(); auto d = uhdr_create_decoder(); auto e = uhdr_create_encoder();

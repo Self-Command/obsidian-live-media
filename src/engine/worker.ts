@@ -18,6 +18,7 @@ interface HdrCore {
   _lm_output_size(): number;
   _lm_fixture(): number;
   _lm_error(): number;
+  _lm_compare(a:number,an:number,b:number,bn:number):number;
 }
 const scope = self as unknown as {
   importScripts(...urls: string[]): void;
@@ -87,6 +88,11 @@ scope.onmessage = async (event) => {
             result = hdr.HEAPU8.slice(output, output + hdr._lm_output_size());
           }
         } finally {hdr._free(p);}
+      } else if(op==='hdr-compare'){
+        const a=data.before as Uint8Array,b=data.after as Uint8Array;
+        const ap=hdr._malloc(a.length),bp=hdr._malloc(b.length);
+        try{if(!ap||!bp)throw new Error('HDR comparison allocation failed');hdr.HEAPU8.set(a,ap);hdr.HEAPU8.set(b,bp);result=hdr._lm_compare(ap,a.length,bp,b.length);}
+        finally{if(ap)hdr._free(ap);if(bp)hdr._free(bp);}
       } else if (op === 'hdr-fixture') {
         const p = hdr._lm_fixture();
         if (!p) throw new Error('HDR synthetic fixture generation failed');

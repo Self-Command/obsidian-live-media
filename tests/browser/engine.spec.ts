@@ -14,6 +14,7 @@ test('offline FFmpeg + UltraHDR load, decode, encode, cancel and reload', async 
     const valid = await e.run('hdr-probe', {input: hdr});
     const compressed = await e.run('hdr-reencode', {input: hdr, quality: 70}) as Uint8Array;
     const validAfter = await e.run('hdr-probe', {input: compressed});
+    const colorError=Number(await e.run('hdr-compare',{before:hdr,after:compressed}));
     const png = await e.encode(new Uint8Array(), 'png', ['-f','lavfi','-i','color=red:s=128x128','-frames:v','1','$OUTPUT']);
     await e.validate(png);
     const pending = e.encode(png, 'png', ['-loop','1','-i','$INPUT','-t','120','-c:v','libx264','$OUTPUT'], 'mp4');
@@ -21,8 +22,9 @@ test('offline FFmpeg + UltraHDR load, decode, encode, cancel and reload', async 
     let cancelled = false;
     try {await pending;} catch {cancelled = true;}
     await e.load(); e.destroy();
-    return {valid, validAfter, hdrBytes: hdr.length, compressedBytes: compressed.length, pngBytes: png.length, cancelled};
+    return {colorError,valid, validAfter, hdrBytes: hdr.length, compressedBytes: compressed.length, pngBytes: png.length, cancelled};
   });
   expect(result.valid).toBe(1); expect(result.validAfter).toBe(1);
   expect(result.pngBytes).toBeGreaterThan(50); expect(result.cancelled).toBe(true);
+  expect(result.colorError).toBeGreaterThanOrEqual(0);expect(result.colorError).toBeLessThanOrEqual(.1);
 });

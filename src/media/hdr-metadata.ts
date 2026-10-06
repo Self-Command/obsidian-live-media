@@ -28,10 +28,10 @@ export function requireHdrMetadataWriter(input:Uint8Array):void{
   }
 }
 export function verifyHdrMetadata(before:Uint8Array,after:Uint8Array):void{
-  for(const prefix of ['Exif\0\0','ICC_PROFILE']){
+  for(const prefix of ['Exif\0\0']){
     const selected=(b:Uint8Array)=>mpfPictures(b).pictures.flatMap(p=>{const image=b.subarray(p.start,p.end);return jpegSegments(image).filter(s=>ascii(image,s.payload,prefix.length)===prefix).map(s=>image.slice(s.start,s.end));});
     const old=selected(before),next=selected(after);
-    if(old.length&&!old.every((bytes,i)=>next[i]&&equal(bytes,next[i]!)))throw new Error('HDR EXIF/ICC metadata preservation failed');
+    if(old.length&&!old.every((bytes,i)=>next[i]&&equal(bytes,next[i]!)))throw new Error('HDR EXIF metadata preservation failed');
   }
 }
 export function retainHdrComments(before:Uint8Array,after:Uint8Array):Uint8Array{

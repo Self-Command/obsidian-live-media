@@ -1,4 +1,22 @@
 import {test,expect} from '@playwright/test';
+test('real decoded Motion Photo keeps layout and caption while automatic preview stays muted',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
+  await page.evaluate(async()=>{
+    const h=(window as any).liveMediaHarness,bytes=new Uint8Array(await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer()),p=h.probe(bytes),c=h.defaults();
+    c['auto.delayMs']=0;c['auto.durationMs']=300;c['auto.cooldownMs']=0;
+    const figure=document.createElement('figure');figure.style.width='240px';document.body.append(figure);const img=document.createElement('img');img.style.width='240px';img.style.height='240px';img.alt='Synthetic photo';figure.append(img);const caption=document.createElement('figcaption');caption.textContent='Caption retained';figure.append(caption);
+    img.src=URL.createObjectURL(new Blob([bytes]));await img.decode();
+    const url=URL.createObjectURL(new Blob([bytes.slice(p.videoStart)],{type:'video/mp4'})),coord=new h.PlaybackCoordinator(()=>c);
+    const photo=new h.Photo(img,url,()=>c,coord,()=>false,()=>{},()=>{},()=>URL.revokeObjectURL(url));Object.assign(window,{realPhoto:{photo,img,c,coord}});
+  });
+  await expect.poll(()=>page.locator('video').evaluate(v=>(v as HTMLVideoElement).muted)).toBe(true);
+  await expect.poll(()=>page.locator('video').evaluate(v=>(v as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  const before=await page.locator('figure').boundingBox();await page.locator('img').click();
+  await expect.poll(()=>page.locator('video').evaluate(v=>getComputedStyle(v).opacity)).toBe('1');
+  expect(await page.locator('figure').boundingBox()).toEqual(before);await expect(page.locator('figcaption')).toHaveText('Caption retained');
+  expect(await page.locator('video').evaluate(v=>(v as HTMLVideoElement).controls)).toBe(false);
+  await page.evaluate(()=>{const t=(window as any).realPhoto;t.photo.destroy();URL.revokeObjectURL(t.img.src);});await expect(page.locator('video')).toHaveCount(0);
+});
 test('photo layer never has controls; auto is muted, repeated clicks stop, drag and modifiers pass through',async({page})=>{
   await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});
   await page.addStyleTag({url:'/dist/styles.css'});
