@@ -81,7 +81,9 @@ export class BatchService {
   private async log(j:Journal,c:Config):Promise<void>{
     await this.store.hiddenWrite(this.journalPath(j.id,c),JSON.stringify(j,null,2));
     const indexPath=String(c['storage.reportDirectory'])+'/index.json';let index:string[]=[];
-    try{index=JSON.parse(await this.store.hiddenRead(indexPath));}catch{/* first transaction */}
+    if(await this.store.exists(indexPath)){
+      index=JSON.parse(await this.store.hiddenRead(indexPath));if(!Array.isArray(index)||index.some(id=>typeof id!=='string'||!/^[\w-]{1,64}$/.test(id)))throw new Error('Transaction index cannot be safely updated');
+    }
     if(!index.includes(j.id)){index.push(j.id);await this.store.hiddenWrite(indexPath,JSON.stringify(index));}
   }
   async commit(items:Prepared[],config:Config):Promise<Journal[]> {
@@ -171,6 +173,14 @@ export class BatchService {
       await this.store.replace(j.source,original,!!config['compression.keepFileTimes']);
       if(await hash(await this.store.read(j.source))!==j.originalHash)throw new Error('Restore readback failed');
       j.state='restored';await this.log(j,config);
+    }finally{this.busy=false;}
+  }
+  async recoverCopy(j:Journal,target:string):Promise<void>{
+    if(this.busy)throw new Error('Batch active');if(!j.backup)throw new Error('No original backup');safePath(target);safePath(j.backup,true);
+    if(target.split('.').at(-1)!==j.source.split('.').at(-1))throw new Error('Keep original extension');this.busy=true;
+    try{const original=await this.store.read(j.backup);if(await hash(original)!==j.originalHash)throw new Error('Backup fingerprint mismatch');
+      if(await this.store.exists(target))throw new Error('Recovery copy target exists');await this.store.create(target,original);
+      if(await hash(await this.store.read(target))!==j.originalHash)throw new Error('Recovery copy readback failed');
     }finally{this.busy=false;}
   }
 }

@@ -42,3 +42,21 @@ it('skips a verified existing copy before encoding the same input and settings a
   i.settingsHash=await hash(new TextEncoder().encode(JSON.stringify(c)));await m.batch.commit([i],c);
   const prepared=await m.batch.prepare([i.path],c);expect(prepared[0]?.reason).toContain('Verified copy already exists');expect(m.compressor.encode).not.toHaveBeenCalled();
 });
+it('protects low disk reserve and never calls the encoder',async()=>{
+  const m=memory(),i=await item();i.path='photo.png';m.files.set(i.path,i.input);m.store.availableBytes=async()=>1;
+  const [prepared]=await m.batch.prepare([i.path],defaults());expect(prepared?.reason).toContain('Insufficient free space');expect(m.compressor.encode).not.toHaveBeenCalled();
+});
+it('corrupt existing history blocks preparation instead of forgetting owned transactions',async()=>{
+  const m=memory(),i=await item();i.path='photo.png';m.files.set(i.path,i.input);m.logs.set('.live-media-reports/index.json','invalid');
+  const [prepared]=await m.batch.prepare([i.path],defaults());expect(prepared?.reason).toContain('history cannot be verified');expect(m.compressor.encode).not.toHaveBeenCalled();
+});
+it('damaged saved output retains original backup and can recover a separate verified copy',async()=>{
+  const m=memory(),i=await item();m.files.set(i.path,i.input);m.store.replace=async(p)=>{m.files.set(p,Uint8Array.of(9));};
+  const c={...defaults(),'compression.output':'replace'};const [j]=await m.batch.commit([i],c);expect(j?.state).toBe('failed');
+  await expect(m.batch.restore(j!,c)).rejects.toThrow('User modified');await m.batch.recoverCopy(j!,'recovered.jpg');expect(m.files.get('recovered.jpg')).toEqual(i.input);expect(m.files.get(i.path)).toEqual(Uint8Array.of(9));
+});
+it('batch resolves frozen per-media encoding preferences and rejects incomplete Apple groups',async()=>{
+  const m=memory(),i=await item();i.path='photo.png';m.files.set(i.path,i.input);m.compressor.encode=vi.fn(async()=>i.encoded!)as Compressor['encode'];
+  await m.batch.prepare([i.path],defaults(),undefined,()=>({...defaults(),'compression.jpegQuality':70}));expect(m.compressor.encode).toHaveBeenCalledWith(i.input,'png',expect.objectContaining({'compression.jpegQuality':70}),expect.any(AbortSignal));
+  i.group='group';await expect(m.batch.commit([i],defaults())).rejects.toThrow('Incomplete Apple');
+});

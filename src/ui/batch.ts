@@ -5,6 +5,7 @@ import type {Reference} from '../references/source';
 import type {BatchService,Prepared,Journal} from '../compression/batch';
 import type {Config} from '../settings/model';
 import {Photo,PlaybackCoordinator} from '../playback/photo';
+import {JsonModal} from './settings';
 export class ScanModal extends Modal {
   private abort=new AbortController();private selected=new Set<string>();private refs:Reference[]=[];
   private range:string;private shared=new Map<string,string[]>();private next=false;
@@ -147,7 +148,8 @@ export class RecoveryModal extends Modal {
       if(!logs.length)this.contentEl.createEl('p',{text:'没有可恢复的原件备份。'});
       for(const j of logs){const expired=this.config['storage.backupRetention']==='manual-days'&&Date.now()-j.timestamp>Number(this.config['storage.backupDays'])*86400000;
         new Setting(this.contentEl).setName(j.source).setDesc(j.state+(expired?' · 达到保留天数，仅供主动检查':''))
-          .addButton(b=>b.setButtonText('恢复').onClick(()=>{void this.batch.restore(j,this.config).then(()=>new Notice('Original restored')).catch(e=>new Notice(String(e)));}));}
+          .addButton(b=>b.setButtonText('恢复').onClick(()=>{void this.batch.restore(j,this.config).then(()=>new Notice('Original restored')).catch(e=>new Notice(String(e)));}))
+          .addButton(b=>b.setButtonText('导出原件副本').onClick(()=>new JsonModal(this.app,'保存备份副本；不覆盖现有文件',j.source.replace(/(\.[^.]+)$/,'-recovered$1'),async path=>{await this.batch.recoverCopy(j,path);new Notice('Verified original copy saved');}).open()));}
     }).catch(e=>this.contentEl.createEl('p',{text:String(e)}));
   }
   override onClose():void {this.contentEl.empty();}

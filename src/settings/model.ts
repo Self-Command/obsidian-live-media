@@ -57,11 +57,20 @@ export function validateField(field: Field, value: unknown): Value {
       if (!Array.isArray(value) || value.some(r => !r || typeof r !== 'object' ||
         !/^[\w-]{1,64}$/.test(String(r.id)) || !/^[\w-]{1,64}$/.test(String(r.language)) ||
         !['list','wikilinks','markdown','field'].includes(String(r.structure)) ||
-        !['direct','candidate','dynamic'].includes(String(r.evidence)))) throw new Error('Invalid declarative rule');
+        !['direct','candidate','dynamic'].includes(String(r.evidence)) || typeof r.enabled!=='boolean' ||
+        r.structure==='field'&&!/^[\w.-]{1,64}$/.test(String(r.field)))) throw new Error('Invalid declarative rule');
     }
     if (field.key === 'pairing.explicit') {
       if (!Array.isArray(value) || value.some(r => !r || typeof r !== 'object' || typeof r.photo !== 'string' || typeof r.video !== 'string')) throw new Error('Pair needs photo and video paths');
       value.forEach(r => {safePath(r.photo); safePath(r.video);});
+    }
+    if(['compression.formats','detect.providers','compatibility.hostOverrides'].includes(field.key)){
+      if(Array.isArray(value)||Object.keys(value).some(key=>!/^[\w-]{1,64}$/.test(key)))throw new Error('Expected named object');
+      for(const [key,v]of Object.entries(value)){
+        if(field.key==='compatibility.hostOverrides'){if(!['inherit','live','viewer','disabled'].includes(String(v)))throw new Error('Invalid host policy');}
+        else if(typeof v!=='boolean')throw new Error('Expected boolean capability preference');
+        if(field.key==='compression.formats'&&!['jpeg','png','webp','motion-jpeg','apple-pair'].includes(key))throw new Error('Format has no validated writer');
+      }
     }
   }
   return structuredClone(value) as Value;
@@ -79,6 +88,7 @@ export function validatePatch(patch: unknown): Config {
 export function validateCombined(config: Config): void {
   if (Number(config['auto.exitRatio']) >= Number(config['auto.enterRatio'])) throw new Error('Exit ratio must be below entry ratio');
   if (config['host.clickPriority'] === 'viewer' && config['manual.gesture'] === 'click') throw new Error('Viewer priority requires an alternate playback gesture');
+  if(Object.values(config['compatibility.hostOverrides'] as object).includes('viewer')&&config['manual.gesture']==='click')throw new Error('Per-host viewer priority also requires an alternate playback gesture');
   if (config['manual.gesture'] === 'modified-click' && config['host.clickPriority'] === 'live' &&
     config['gesture.modifier'] === config['host.passthroughModifier']) throw new Error('Playback and passthrough modifiers conflict');
   if (config['storage.backupDirectory'] === config['storage.reportDirectory'] || config['storage.copyDirectory'] === config['storage.backupDirectory']) throw new Error('Output and tool directories must differ');
@@ -114,7 +124,8 @@ export class SettingsModel {
   set(key: string, value: unknown): void {
     const patch = validatePatch({[key]: value});
     const next = {...this.data.global, ...patch};
-    validateCombined({...defaults(this.platform), ...next}); this.data.global = next;
+    validateCombined({...defaults(this.platform), ...next});const previous=this.data.global;this.data.global=next;
+    try{this.effective();}catch(error){this.data.global=previous;throw error;}
   }
   exportPublic(): string {
     const global = {...this.data.global}; delete global['native.executable']; global['native.enabled'] = false;

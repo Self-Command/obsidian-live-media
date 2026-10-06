@@ -15,7 +15,7 @@ export function requireHdrMetadataWriter(input:Uint8Array):void{
     if(marker<0xe0||marker>0xef||marker===0xe0)continue;
     const payload=ascii(bytes,segment.payload,segment.end-segment.payload);
     if(marker===0xe1&&payload.startsWith('Exif\0\0')){if(picture.start!==0)throw new Error('Gain-map EXIF metadata protected');continue;}
-    if(marker===0xe2&&payload.startsWith('ICC_PROFILE')){if(picture.start!==0)throw new Error('Gain-map ICC metadata protected');continue;}
+    if(marker===0xe2&&payload.startsWith('ICC_PROFILE'))continue;
     if(marker===0xe2&&(payload.startsWith('MPF\0')||payload.startsWith('urn:iso:std:iso:ts:21496')))continue;
     if(marker===0xe1&&payload.startsWith('http://ns.adobe.com/xap/1.0/\0')){
       const tags=xmpTags(payload.slice(29)),ns=namespaces(tags);
@@ -29,7 +29,7 @@ export function requireHdrMetadataWriter(input:Uint8Array):void{
 }
 export function verifyHdrMetadata(before:Uint8Array,after:Uint8Array):void{
   for(const prefix of ['Exif\0\0','ICC_PROFILE']){
-    const selected=(b:Uint8Array)=>jpegSegments(b).filter(s=>ascii(b,s.payload,prefix.length)===prefix).map(s=>b.slice(s.start,s.end));
+    const selected=(b:Uint8Array)=>mpfPictures(b).pictures.flatMap(p=>{const image=b.subarray(p.start,p.end);return jpegSegments(image).filter(s=>ascii(image,s.payload,prefix.length)===prefix).map(s=>image.slice(s.start,s.end));});
     const old=selected(before),next=selected(after);
     if(old.length&&!old.every((bytes,i)=>next[i]&&equal(bytes,next[i]!)))throw new Error('HDR EXIF/ICC metadata preservation failed');
   }

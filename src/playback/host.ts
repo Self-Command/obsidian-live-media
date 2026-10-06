@@ -10,12 +10,13 @@ export class HostManager {
   cache:ByteCache;coordinator:PlaybackCoordinator;private sessions=new Set<HostSession>();private previewed=new Set<string>();
   constructor(public app:App,public model:SettingsModel,public index:ReferenceIndex,public notice:(m:string)=>void,public save:()=>void){
     const c=model.effective();this.cache=new ByteCache(Number(c['performance.cacheMiB'])*1048576,Number(c['performance.cacheEntries']));
-    this.coordinator=new PlaybackCoordinator(()=>model.effective());this.previewed=new Set(model.data.previewed);
+    this.coordinator=new PlaybackCoordinator(()=>model.effective());this.previewed=new Set(c['auto.remember']==='persistent'?model.data.previewed:[]);
   }
   attach(root:HTMLElement,source:string,kind:'reading'|'preview'):HostSession {
     const session=new HostSession(this,root,source,kind);this.sessions.add(session);session.start();return session;
   }
   forget(session:HostSession):void {this.sessions.delete(session);}
+  clearPreviewed():void {this.previewed.clear();this.model.data.previewed=[];}
   settingsChanged():void {
     const c=this.model.effective();this.cache.maxBytes=Number(c['performance.cacheMiB'])*1048576;this.cache.maxEntries=Number(c['performance.cacheEntries']);this.cache.prune();
     for(const s of this.sessions)s.refresh();
@@ -52,8 +53,7 @@ export class HostSession extends MarkdownRenderChild {
     const c=this.manager.model.effective();
     if((this.kind==='reading'&&!c['render.reading'])||(this.kind==='preview'&&!c['render.livePreview']))return;
     for(const [img,value]of this.photos)if(!img.isConnected||!this.root.contains(img)||this.manager.index.rendered(img,this.source).path!==value.path){value.photo.destroy();this.photos.delete(img);}
-    const note=this.manager.app.vault.getAbstractFileByPath(this.source);
-    const noteOverrides=note instanceof TFile?this.manager.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;
+    const noteOverrides=()=>{const note=this.manager.app.vault.getAbstractFileByPath(this.source);return note instanceof TFile?this.manager.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;};
     for(const img of this.root.querySelectorAll<HTMLImageElement>('img')){
       if(img.closest('.live-media-photo-layer')||this.photos.has(img)||this.waiting.has(img))continue;
       const gallery=img.matches('.simple-gallery-img')||!!img.closest('.simple-gallery-container, .simple-gallery-grid, .simple-gallery');
@@ -67,7 +67,7 @@ export class HostSession extends MarkdownRenderChild {
       const load=()=>this.enqueue(async()=>{
         let release:(()=>void)|undefined;let url:string|undefined;
         try{
-          const settings=this.manager.model.effective(file.path,noteOverrides);
+          const settings=this.manager.model.effective(file.path,noteOverrides());
           if(file.stat.size>Number(settings['performance.maxInputMiB'])*1048576)return;
           const key=file.path+'\0'+file.stat.mtime+'\0'+file.stat.size;
           let bytes=this.manager.cache.get(key);
@@ -93,8 +93,9 @@ export class HostSession extends MarkdownRenderChild {
           release=this.manager.cache.retain(key,Number(settings['performance.warmSeconds']));url=URL.createObjectURL(new Blob([video.slice().buffer],{type:'video/mp4'}));
           const finalURL=url,finalRelease=release;
           const photo=new Photo(img,url,()=>{
-            const effective=this.manager.model.effective(file.path,noteOverrides);
+            const effective=this.manager.model.effective(file.path,noteOverrides());
             if(gallery&&overrides['simple-gallery']==='viewer')effective['host.clickPriority']='viewer';
+            if(gallery&&overrides['simple-gallery']==='live')effective['host.clickPriority']='live';
             return effective;
           },this.manager.coordinator,()=>this.manager.wasPreviewed(file.path),()=>this.manager.remember(file.path),this.manager.notice,
           ()=>{URL.revokeObjectURL(finalURL);finalRelease();},this.kind);

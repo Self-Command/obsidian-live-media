@@ -27,6 +27,12 @@ describe('schema contract and override boundaries',()=>{
     const m=new SettingsModel({},'desktop');expect(()=>m.set('host.clickPriority','viewer')).toThrow();
     expect(()=>validateCombined({...defaults(),'auto.enterRatio':.1,'auto.exitRatio':.2})).toThrow();
   });
+  it('rejects fake format toggles and viewer-only click policy; validates active platform on edit',()=>{
+    expect(()=>validatePatch({'compression.formats':{gif:true}})).toThrow('validated writer');
+    expect(()=>validateCombined({...defaults(),'compatibility.hostOverrides':{'simple-gallery':'viewer'}})).toThrow('alternate');
+    const m=new SettingsModel({platforms:{desktop:{'auto.exitRatio':.5}}},'desktop');
+    expect(()=>m.set('auto.enterRatio',.3)).toThrow();expect(m.effective()['auto.enterRatio']).toBe(.6);
+  });
 });
 describe('reference evidence',()=>{
   const options={native:true,html:true,codeCandidates:true,rules:defaults()['detect.rules']as never,legacyLive:false};
@@ -42,6 +48,10 @@ describe('reference evidence',()=>{
   });
   it('deduplicates identities without promoting unresolved media',()=>{
     const r=mergeReferences([{source:'n',path:'a.jpg',link:'a.jpg',evidence:'candidate',origin:'x',offset:0},{source:'n',path:'a.jpg',link:'a',evidence:'direct',origin:'y',offset:10}]);expect(r).toHaveLength(1);expect(r[0]?.evidence).toBe('direct');
+  });
+  it('does not promote a commented gallery and accepts declared bare wiki-link syntax',()=>{
+    expect(sourceReferences('<!--\n```simple-gallery\n- ![[hidden.jpg]]\n```\n-->','n',options)).toEqual([]);
+    const r=sourceReferences('```custom\n[[photo.jpg|caption]]\n```','n',{...options,rules:[{id:'custom',language:'custom',structure:'wikilinks',evidence:'direct',enabled:true}]});expect(r[0]?.link).toBe('photo.jpg');
   });
 });
 describe('bounded format parsing and XMP resource preservation',()=>{

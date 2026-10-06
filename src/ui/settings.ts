@@ -28,7 +28,7 @@ export class JsonModal extends Modal {
 }
 export class LiveSettingsTab extends PluginSettingTab {
   private search='';private advanced=false;
-  constructor(app:App,plugin:Plugin,private model:SettingsModel,private save:()=>Promise<void>,private changed:()=>void){super(app,plugin);}
+  constructor(app:App,plugin:Plugin,private model:SettingsModel,private save:()=>Promise<void>,private changed:(clearPreviews?:boolean)=>void){super(app,plugin);}
   override display():void {
     const root=this.containerEl;root.empty();root.addClass('live-media');
     root.createEl('h2',{text:'Live Media'});
@@ -54,7 +54,7 @@ export class LiveSettingsTab extends PluginSettingTab {
       if(!/^[\w-]{1,64}$/.test(name))throw new Error('Use 1–64 letters/numbers/dashes');this.model.data.presets[name]={...this.model.data.global};await this.persist();
     }).open()));
     new Setting(root).setName('重置 · Reset').addButton(b=>b.setButtonText('全部默认').onClick(()=>new JsonModal(this.app,'确认恢复默认值','仅清除偏好，不删除照片、备份或报告。',async()=>{this.model.data.global={};this.model.data.platforms={};await this.persist();}).open()))
-      .addButton(b=>b.setButtonText('清除预览记录').onClick(()=>{this.model.data.previewed=[];void this.persist();}));
+      .addButton(b=>b.setButtonText('清除预览记录').onClick(()=>{this.model.data.previewed=[];this.changed(true);void this.persist();}));
     if(this.advanced){
       new Setting(root).setName('平台覆盖 · Platform profiles').addButton(b=>b.setButtonText('编辑 JSON').onClick(()=>new JsonModal(this.app,'平台覆盖',JSON.stringify(this.model.data.platforms,null,2),async text=>{
         const values=JSON.parse(text) as Record<string,unknown>;const next:typeof this.model.data.platforms={};

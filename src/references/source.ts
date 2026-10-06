@@ -15,6 +15,8 @@ function standard(s: string, source: string, base: number, evidence: Evidence, o
   return result;
 }
 export function sourceReferences(body: string, source: string, options: {native: boolean; html: boolean; codeCandidates: boolean; rules: Rule[]; legacyLive: boolean}): Reference[] {
+  // Mask before reading fences as well: a commented-out gallery is not a live reference.
+  body=body.replace(/<!--[^]*?-->/g,m=>' '.repeat(m.length)).replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/,m=>' '.repeat(m.length));
   const result: Reference[]=[];let plain='';let position=0;
   const fence=/^ {0,3}(`{3,}|~{3,})([^\r\n]*)\r?\n/gm;
   let m: RegExpExecArray | null;
@@ -38,6 +40,8 @@ export function sourceReferences(body: string, source: string, options: {native:
       } else if(rule.structure==='field'){
         let off=start;for(const line of code.split('\n')){const colon=line.indexOf(':');
           if(colon>=0&&line.slice(0,colon).trim()===rule.field)result.push({link:line.slice(colon+1).trim(),source,evidence:rule.evidence,origin:rule.id,offset:off});off+=line.length+1;}
+      } else if(rule.structure==='wikilinks'){
+        for(const m of code.matchAll(/\[\[([^\]\r\n]+)\]\]/g))result.push({link:m[1]!.split('|')[0]!.split('#')[0]!.trim(),source,evidence:rule.evidence,origin:rule.id,offset:start+m.index});
       } else result.push(...standard(code,source,start,rule.evidence,rule.id));
     }}else if(options.codeCandidates)result.push(...standard(code,source,start,'candidate','unknown-code'));
     const next=ending?close.lastIndex:body.length;
