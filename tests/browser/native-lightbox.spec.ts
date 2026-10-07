@@ -97,8 +97,8 @@ test('LIVE badge stays inset inside actual photo pixels, excluding lightbox padd
   await page.evaluate(()=>{const h=(window as any).playbackHost;h.viewer.img.style.transform='none';h.badgeInsets=()=>{
     const img=h.viewer.img,style=getComputedStyle(img),r=img.getBoundingClientRect(),badge=img.parentElement.querySelector('.live-media-badge').getBoundingClientRect();
     const sx=r.width/img.offsetWidth,sy=r.height/img.offsetHeight,pl=parseFloat(style.paddingLeft),pr=parseFloat(style.paddingRight),pt=parseFloat(style.paddingTop),pb=parseFloat(style.paddingBottom);
-    const w=img.clientWidth-pl-pr,h=img.clientHeight-pt-pb,k=Math.min(w/img.naturalWidth,h/img.naturalHeight),paintW=img.naturalWidth*k,paintH=img.naturalHeight*k;
-    return {right:(r.left+(pl+(w-paintW)/2+paintW)*sx-badge.right)/sx,top:(badge.top-(r.top+(pt+(h-paintH)/2)*sy))/sy};
+    const w=img.clientWidth-pl-pr,contentHeight=img.clientHeight-pt-pb,k=Math.min(w/img.naturalWidth,contentHeight/img.naturalHeight),paintW=img.naturalWidth*k,paintH=img.naturalHeight*k;
+    return {right:(r.left+(pl+(w-paintW)/2+paintW)*sx-badge.right)/sx,top:(badge.top-(r.top+(pt+(contentHeight-paintH)/2)*sy))/sy};
   };});
   await expect.poll(()=>page.evaluate(()=>(window as any).playbackHost.badgeInsets().right)).toBeGreaterThan(7);
   await expect.poll(()=>page.evaluate(()=>(window as any).playbackHost.badgeInsets().top)).toBeGreaterThan(7);
