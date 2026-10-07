@@ -4,7 +4,7 @@ test('downloaded main.js registers public plugin entries, loads settings and unl
   const result=await page.evaluate(async()=>{
     const source=await(await fetch('/dist/main.js')).text();
     const entries:any={commands:[],post:[],extensions:[],events:[],tabs:[],writes:[]};
-    class Component {load(){}unload(){(this as any).onunload?.();}register(){} }
+    class Component {load(){}unload(){(this as any).onunload?.();}register(){}registerDomEvent(el:EventTarget,name:string,fn:EventListener,options?:boolean){el.addEventListener(name,fn,options);} }
     class MarkdownRenderChild extends Component{constructor(public containerEl:HTMLElement){super();}}
     class Plugin extends Component {
       app:any;async loadData(){return {global:{'auto.mode':'off','diagnostics.level':'off'}};}async saveData(v:unknown){entries.writes.push(v);}
@@ -30,7 +30,7 @@ test('downloaded plugin enhances asynchronous gallery images and disables them i
   await page.evaluate(async()=>{
     const source=await(await fetch('/dist/main.js')).text(),bytes=await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer();
     const resource=URL.createObjectURL(new Blob([bytes]));const entries:any={post:[],disposers:[]};
-    class Component{load(){}register(fn:()=>void){entries.disposers.push(fn);}unload(){(this as any).onunload?.();}}
+    class Component{load(){}register(fn:()=>void){entries.disposers.push(fn);}registerDomEvent(el:EventTarget,name:string,fn:EventListener,options?:boolean){el.addEventListener(name,fn,options);this.register(()=>el.removeEventListener(name,fn,options));}unload(){(this as any).onunload?.();}}
     class MarkdownRenderChild extends Component{constructor(public containerEl:HTMLElement){super();}}
     class Plugin extends Component{app:any;async loadData(){return {global:{'auto.mode':'off','diagnostics.level':'off'}};}async saveData(){}addCommand(){}addSettingTab(){}registerEvent(){}registerEditorExtension(){}registerMarkdownPostProcessor(fn:unknown){entries.post.push(fn);}}
     class Modal{}class Setting{}class TFile{constructor(public path:string,public extension:string,public stat={mtime:1,size:bytes.byteLength,ctime:1}){}}

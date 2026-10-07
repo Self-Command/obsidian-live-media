@@ -111,3 +111,38 @@ test('press-time image viewer cannot consume live click; modifier and ordinary p
   await page.evaluate(()=>(window as any).pressHost.photo.destroy());
   await page.locator('#live').click();expect(await page.evaluate(()=>(window as any).pressHost.opened)).toBe(6);
 });
+
+test('visible automatic previews queue instead of dropping and all attempts remain muted',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
+  await page.evaluate(()=>{
+    const h=(window as any).liveMediaHarness,c=h.defaults();c['auto.mode']='every-enter';c['auto.delayMs']=0;c['auto.cooldownMs']=0;c['auto.durationMs']='full';c['auto.concurrent']=1;
+    const coord=new h.PlaybackCoordinator(()=>c),calls:number[]=[],sound:boolean[]=[];
+    const photos=[0,1,2].map(index=>{
+      const box=document.createElement('div');box.style.display='inline-block';document.body.append(box);const img=document.createElement('img');img.width=128;img.height=128;img.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"></svg>';box.append(img);
+      const photo=new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>{});const v=box.querySelector('video')!;
+      v.removeAttribute('src');v.play=async()=>{calls.push(index);sound.push(v.muted);};v.pause=()=>{};return photo;
+    });Object.assign(window,{autoQueue:{coord,calls,sound,photos}});
+  });
+  await expect.poll(()=>page.evaluate(()=>(window as any).autoQueue.calls.length)).toBe(1);
+  await page.evaluate(()=>{const t=(window as any).autoQueue;t.photos[t.calls[0]].video.dispatchEvent(new Event('ended'));});
+  await expect.poll(()=>page.evaluate(()=>(window as any).autoQueue.calls.length)).toBe(2);
+  await page.evaluate(()=>{const t=(window as any).autoQueue;t.photos[t.calls[1]].video.dispatchEvent(new Event('ended'));});
+  await expect.poll(()=>page.evaluate(()=>(window as any).autoQueue.calls.length)).toBe(3);
+  expect(await page.evaluate(()=>(window as any).autoQueue.sound)).toEqual([true,true,true]);
+  expect(await page.evaluate(()=>new Set((window as any).autoQueue.calls).size)).toBe(3);
+  await page.evaluate(()=>(window as any).autoQueue.coord.destroy());await expect(page.locator('video')).toHaveCount(0);
+});
+
+test('tall photo previews on first visibility without a false startup cooldown',async({page})=>{
+  await page.goto('/tests/browser/index.html');await page.addScriptTag({url:'/dist/harness.js'});await page.addStyleTag({url:'/dist/styles.css'});
+  await page.evaluate(()=>{
+    const h=(window as any).liveMediaHarness,c=h.defaults();c['auto.delayMs']=0;c['auto.durationMs']='full';c['auto.cooldownMs']=60000;
+    const box=document.createElement('div');document.body.append(box);const img=document.createElement('img');img.width=200;img.height=2000;img.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="2000"></svg>';box.append(img);
+    const coord=new h.PlaybackCoordinator(()=>c),photo=new h.Photo(img,'',()=>c,coord,()=>false,()=>{},()=>{},()=>{});const video=box.querySelector('video')!;
+    video.removeAttribute('src');video.pause=()=>{};video.play=async()=>{};
+    photo.stop();Object.assign(window,{tallPhoto:{coord,photo,video}});
+  });
+  await expect.poll(()=>page.evaluate(()=>(window as any).tallPhoto.photo.playing)).toBe(true);
+  expect(await page.evaluate(()=>(window as any).tallPhoto.video.muted)).toBe(true);
+  await page.evaluate(()=>(window as any).tallPhoto.coord.destroy());
+});

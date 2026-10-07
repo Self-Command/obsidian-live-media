@@ -1,11 +1,11 @@
-import {Plugin, Notice,Platform,TFile,editorInfoField} from 'obsidian';
+import {Plugin, Notice,Platform,TFile,MarkdownView,editorInfoField,editorLivePreviewField} from 'obsidian';
 import {ViewPlugin,type EditorView,type ViewUpdate} from '@codemirror/view';
 import {OfflineEngine} from './engine/client';
 import {NativeEngine} from './engine/native';
 import {SettingsModel} from './settings/model';
 import {LiveSettingsTab,JsonModal} from './ui/settings';
 import {ReferenceIndex} from './references/vault';
-import {HostManager,type HostSession} from './playback/host';
+import {HostManager} from './playback/host';
 import {Compressor} from './compression/encode';
 import {BatchService} from './compression/batch';
 import {VaultStore} from './compression/obsidian-store';
@@ -14,6 +14,7 @@ import {probe} from './media/probe';
 import type {ReferenceProvider} from './references/source';
 import {Diagnostics} from './diagnostics';
 import {RemoteMediaModal} from './ui/remote';
+import {EditorBinding} from './playback/editor';
 export default class LiveMedia extends Plugin {
   engine = new OfflineEngine();
   private model!:SettingsModel;private references!:ReferenceIndex;private hosts!:HostManager;private batch!:BatchService;
@@ -41,19 +42,26 @@ export default class LiveMedia extends Plugin {
       if(logs.some(j=>['backed-up','writing','failed'].includes(j.state)))this.notify('Live Media 有未完成替换记录，请运行“检查日志并恢复原件”。不会自动继续写入。','summary');
     }).catch(()=>this.notify('Live Media 的历史报告无法验证，请检查恢复目录。'));
     this.addSettingTab(new LiveSettingsTab(this.app,this,this.model,this.save,clear=>{if(clear)this.hosts.clearPreviewed();this.hosts.settingsChanged();}));
-    this.registerMarkdownPostProcessor((el,ctx)=>{ctx.addChild(this.hosts.attach(el,ctx.sourcePath,'reading'));});
+    this.registerMarkdownPostProcessor((el,ctx)=>{ctx.addChild(this.hosts.attach(el,ctx.sourcePath,el.closest('.cm-editor')?'preview':'reading'));});
     const manager=this.hosts;
+    const app=this.app;const bindings=new Set<EditorBinding>();
     this.registerEditorExtension(ViewPlugin.fromClass(class {
-      session?:HostSession;
-      private source?:string;private generation=0;
-      constructor(view:EditorView){this.attach(view);}
-      private attach(view:EditorView):void{const info=view.state.field(editorInfoField,false);this.source=info?.file?.path;if(this.source)this.session=manager.attach(view.dom,this.source,'preview');}
-      update(update:ViewUpdate):void{
-        const source=update.state.field(editorInfoField,false)?.file?.path;if(source===this.source)return;
-        const generation=++this.generation;queueMicrotask(()=>{if(generation!==this.generation)return;this.session?.destroy();this.session=undefined;this.attach(update.view);});
-      }
-      destroy():void{this.generation++;this.session?.destroy();}
+      private binding:EditorBinding;
+      constructor(view:EditorView){this.binding=new EditorBinding(view,manager,()=>{
+        if(view.state.field(editorLivePreviewField,false)===false)return undefined;
+        const source=view.state.field(editorInfoField,false)?.file?.path;if(source)return source;
+        const leaf=app.workspace.getLeavesOfType?.('markdown').find(leaf=>leaf.view instanceof MarkdownView&&leaf.view.containerEl.contains(view.dom));
+        return leaf?.view instanceof MarkdownView?leaf.view.file?.path:undefined;
+      });bindings.add(this.binding);}
+      update(_update:ViewUpdate):void{this.binding.refresh();}
+      destroy():void{bindings.delete(this.binding);this.binding.destroy();}
     }));
+    const refreshEditors=()=>{for(const binding of bindings)binding.refresh();};
+    this.registerEvent(this.app.workspace.on('layout-change',refreshEditors));
+    this.registerEvent(this.app.workspace.on('file-open',refreshEditors));
+    this.registerEvent(this.app.workspace.on('active-leaf-change',refreshEditors));
+    this.register(()=>{for(const binding of bindings)binding.destroy();bindings.clear();});
+    this.hosts.watchViewers(this.app.workspace.containerEl?.ownerDocument??document);
     this.registerEvent(this.app.vault.on('modify',f=>this.hosts.invalidate(f.path)));
     this.registerEvent(this.app.vault.on('create',()=>this.references.invalidate()));
     this.registerEvent(this.app.vault.on('delete',f=>{this.references.invalidate();this.hosts.invalidate(f.path);delete this.model.data.photos[f.path];}));

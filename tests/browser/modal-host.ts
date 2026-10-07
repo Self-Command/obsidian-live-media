@@ -10,7 +10,7 @@ export async function installModalHost(page:Page,options:{failReviewOnce?:boolea
     proto.empty=function(){this.replaceChildren();};proto.setText=function(text:string){this.textContent=text;};proto.addClass=function(...classes:string[]){this.classList.add(...classes);};
     proto.createEl=function(tag:string,options:any={}){const el=document.createElement(tag);if(options.text)el.textContent=options.text;if(options.cls)el.className=options.cls;for(const [name,value]of Object.entries(options.attr??{}))el.setAttribute(name,String(value));this.append(el);return el;};
     proto.createDiv=function(options:any={}){return this.createEl('div',typeof options==='string'?{cls:options}:options);};
-    class Component{load(){}unload(){(this as any).onunload?.();}register(){} }
+    class Component{load(){}unload(){(this as any).onunload?.();}register(){}registerDomEvent(el:EventTarget,name:string,fn:EventListener,options?:boolean){el.addEventListener(name,fn,options);} }
     class Plugin extends Component{app:any;async loadData(){return {global:{'auto.mode':'off','diagnostics.level':'off'}};}async saveData(){}addCommand(c:any){entries.commands.push(c);}addSettingTab(){}registerMarkdownPostProcessor(){}registerEditorExtension(){}registerEvent(){} }
     class Modal{
       isOpen=false;containerEl=document.createElement('section');titleEl=document.createElement('h2');contentEl=document.createElement('div');
