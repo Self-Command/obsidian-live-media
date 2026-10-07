@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: live-media-${{ github.ref }}
   cancel-in-progress: true
@@ -84,6 +85,14 @@ jobs:
         with:
           name: build-${{ github.sha }}
           path: dist/
+      - name: Download previous faulty artifact for geometry regression evidence
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: build-4c12b92288a653e63abbbaf5a53309ff1990c000
+          run-id: 37555158752
+          github-token: ${{ github.token }}
+          path: dist/baseline/
       - run: npm run verify:package
       - run: npx playwright install --with-deps chromium
       - run: npm run test:browser

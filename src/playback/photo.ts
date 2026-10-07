@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import type {Config} from '../settings/model';
+import {PhotoGeometry} from './geometry';
 const parentPositions=new WeakMap<HTMLElement,{position:string;count:number}>();
 export class PlaybackCoordinator {
   photos=new Set<Photo>();
@@ -12,7 +13,8 @@ export class PlaybackCoordinator {
     const c=this.settings();const memory=(performance as unknown as {memory?:{usedJSHeapSize:number;jsHeapSizeLimit:number}}).memory;
     const constrained=memory&&memory.usedJSHeapSize>memory.jsHeapSizeLimit*.75;
     if(constrained&&c['auto.lowResource']==='stop')return false;
-    return playing.length<(constrained?1:Number(c['auto.concurrent']));
+    const limit=c['auto.concurrent']==='all-visible'?Infinity:Number(c['auto.concurrent']);
+    return playing.length<(constrained&&c['auto.lowResource']==='limit-one'?1:limit);
   }
   stopAll():void {for(const p of this.photos)p.stop();}
   wait(photo:Photo):void {this.waiting.add(photo);}
@@ -23,7 +25,7 @@ export class PlaybackCoordinator {
 export class Photo {
   playing=false; manual=false;
   private abort=new AbortController(); private timers=new Set<ReturnType<typeof setTimeout>>();
-  private observer:IntersectionObserver; private resize:ResizeObserver;
+  private observer:IntersectionObserver; private geometry:PhotoGeometry;
   private video:HTMLVideoElement;private badge:HTMLSpanElement;private layer:HTMLSpanElement;
   private ratio=0;private pointer?:{x:number;y:number;type:string;at:number;id:number};private moved=false;
   private entered=false;private loops=0;private stoppedAt=0;private position=0;
@@ -66,6 +68,9 @@ export class Photo {
     const win=doc.defaultView;
     const ownsPress=(e:MouseEvent)=>{
       const c=this.config();if(!c['manual.enabled']||this.passthrough(e))return false;
+      // A viewer already owns the enlarged image. Preserve its pointer stream
+      // for pan/pinch; only consume a genuine stationary playback click.
+      if(this.host==='viewer')return false;
       const gesture=c['manual.gesture'];
       return c['host.clickPriority']==='live'||gesture==='long-press'||
         (gesture==='modified-click'&&this.modifier(e,String(c['gesture.modifier'])));
@@ -78,6 +83,7 @@ export class Photo {
       if(e.target===img&&ownsPress(e))e.stopImmediatePropagation();
     },{capture:true,signal:this.abort.signal});
     win?.addEventListener('pointerup',()=>{this.clearLongPress();this.pointer=undefined;},{capture:true,signal:this.abort.signal});
+    win?.addEventListener('pointermove',e=>{if(this.host==='viewer'&&this.pointer&&Math.hypot(e.clientX-this.pointer.x,e.clientY-this.pointer.y)>Number(this.config()[this.pointer.type==='touch'?'gesture.touchTolerancePx':'gesture.mouseTolerancePx'])){this.moved=true;this.clearLongPress();}},{capture:true,signal:this.abort.signal});
     win?.addEventListener('pointercancel',()=>{this.clearLongPress();this.pointer=undefined;this.moved=true;},{capture:true,signal:this.abort.signal});
     win?.addEventListener('click',e=>{
       if(e.target!==img||this.moved||this.passthrough(e))return;
@@ -106,16 +112,12 @@ export class Photo {
       const possible=Math.min(e.boundingClientRect.width,bounds.width)*Math.min(e.boundingClientRect.height,bounds.height);
       this.ratio=e.isIntersecting&&possible>0?Math.min(1,e.intersectionRect.width*e.intersectionRect.height/possible):0;this.visibility();
     },{threshold:Array.from({length:51},(_,i)=>i/50)});
-    this.observer.observe(img);this.resize=new ResizeObserver(()=>this.layout());this.resize.observe(img);
-    this.resize.observe(parent);win?.addEventListener('scroll',()=>this.layout(),{capture:true,passive:true,signal:this.abort.signal});
-    listen(img,'load',()=>this.layout());this.coordinator.photos.add(this);this.refresh();this.layout();
+    this.observer.observe(img);this.geometry=new PhotoGeometry(img,this.layer,this.video,parent);
+    this.coordinator.photos.add(this);this.refresh();
   }
   private schedule(fn:()=>void,ms:number):ReturnType<typeof setTimeout> {const timer=setTimeout(()=>{this.timers.delete(timer);if(!this.abort.signal.aborted)fn();},ms);this.timers.add(timer);return timer;}
   private clearLongPress():void {if(this.longPress!==undefined){clearTimeout(this.longPress);this.timers.delete(this.longPress);this.longPress=undefined;}}
-  private layout():void {if(this.abort.signal.aborted||!this.img.isConnected||this.img.parentElement!==this.parent)return;
-    const r=this.img.getBoundingClientRect(),p=this.parent.getBoundingClientRect();
-    const sx=this.parent.offsetWidth?p.width/this.parent.offsetWidth:1,sy=this.parent.offsetHeight?p.height/this.parent.offsetHeight:1;
-    Object.assign(this.layer.style,{left:((r.left-p.left)/(sx||1)-this.parent.clientLeft+this.parent.scrollLeft)+'px',top:((r.top-p.top)/(sy||1)-this.parent.clientTop+this.parent.scrollTop)+'px',width:r.width/(sx||1)+'px',height:r.height/(sy||1)+'px'});}
+  attached():boolean {return this.img.parentElement===this.parent;}
   refresh():void {
     const c=this.config();const reduced=!!c['accessibility.respectReducedMotion']&&matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.video.style.transition=`opacity ${reduced?0:c['appearance.transitionMs']}ms`;
@@ -206,7 +208,7 @@ export class Photo {
     this.coordinator.forget(this);this.video.style.opacity='0';this.img.style.opacity=this.imageOpacity;this.layer.classList.remove('is-playing');
     if(wasPlaying){this.stoppedAt=Date.now();this.coordinator.released();}}
   destroy():void {if(this.abort.signal.aborted)return;this.stop();this.abort.abort();for(const t of this.timers)clearTimeout(t);this.timers.clear();
-    this.observer.disconnect();this.resize.disconnect();this.video.removeAttribute('src');this.video.load();this.layer.remove();
+    this.observer.disconnect();this.geometry.destroy();this.video.removeAttribute('src');this.video.load();this.layer.remove();
     this.restoreAttribute('tabindex',this.tabIndex);this.restoreAttribute('aria-label',this.aria);this.restoreAttribute('role',this.role);
     const parentState=parentPositions.get(this.parent);if(parentState&&--parentState.count===0){this.parent.style.position=parentState.position;parentPositions.delete(this.parent);}
     this.coordinator.photos.delete(this);this.release();}

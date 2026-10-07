@@ -26,6 +26,7 @@ export class HostManager {
     const inspect=(root:Element)=>{
       const images=root.matches('img')?[root as HTMLImageElement]:[...root.querySelectorAll<HTMLImageElement>('img')];
       for(const img of images){
+        const session=this.viewerSessions.get(img);if(session){session.rescan();continue;}
         if(!img.isConnected||this.viewerSessions.has(img)||this.owners.has(img)||img.closest('.cm-editor,.markdown-source-view,.markdown-reading-view,.markdown-preview-view,.live-media,.live-media-photo-layer'))continue;
         if(!this.index.rendered(img,'').path)continue;
         this.viewerSessions.set(img,this.attach(img,'','viewer'));
@@ -80,7 +81,7 @@ export class HostSession extends MarkdownRenderChild {
   private scan():void {
     const c=this.manager.model.effective();
     if((this.kind==='reading'&&!c['render.reading'])||(this.kind==='preview'&&!c['render.livePreview']))return;
-    for(const [img,value]of this.photos)if(!img.isConnected||!this.root.contains(img)||this.manager.index.rendered(img,this.source).path!==value.path){value.photo.destroy();this.photos.delete(img);this.manager.release(img,this);this.visibility?.unobserve(img);}
+    for(const [img,value]of this.photos)if(!img.isConnected||!this.root.contains(img)||!value.photo.attached()||this.manager.index.rendered(img,this.source).path!==value.path){value.photo.destroy();this.photos.delete(img);this.manager.release(img,this);this.visibility?.unobserve(img);}
     const noteOverrides=()=>{const note=this.manager.app.vault.getAbstractFileByPath(this.source);return note instanceof TFile?this.manager.app.metadataCache.getFileCache(note)?.frontmatter?.live_media:undefined;};
     const images=this.root.matches('img')?[this.root as HTMLImageElement]:[...this.root.querySelectorAll<HTMLImageElement>('img')];
     for(const img of images){

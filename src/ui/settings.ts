@@ -80,6 +80,7 @@ export class LiveSettingsTab extends PluginSettingTab {
       const set=(v:unknown)=>{try{this.model.set(field.key,v);void this.save().then(()=>{this.changed();if(field.key==='settings.language')this.display();});}catch(e){new Notice(String(e));}};
       const val=c[field.key];
       if(field.kind==='boolean')row.addToggle(t=>t.setValue(!!val).setDisabled(!!blocked).onChange(set));
+      else if(field.key==='auto.concurrent')row.addDropdown(d=>d.addOptions({'1':'1','2':'2','3':'3','all-visible':'所有可见 LIVE 同时播放 · All visible'}).setValue(String(val)).onChange(v=>set(v==='all-visible'?v:Number(v))));
       else if(field.kind==='enum')row.addDropdown(d=>{for(const option of field.options??[])d.addOption(option,option);d.setValue(String(val)).setDisabled(!!blocked).onChange(set);});
       else if(field.kind==='json')row.addButton(b=>b.setButtonText('编辑').setDisabled(!!blocked).onClick(()=>new JsonModal(this.app,field.key,JSON.stringify(val,null,2),async text=>{this.model.set(field.key,JSON.parse(text));await this.persist();}).open()));
       else row.addText(t=>t.setValue(String(val)).setDisabled(!!blocked).onChange(v=>set(field.kind==='number'?Number(v):field.kind==='mixed'&&!field.options?.includes(v)?Number(v):v)));

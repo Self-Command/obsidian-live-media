@@ -1,10 +1,10 @@
 import type {Page} from '@playwright/test';
 /** Downloaded production main.js, synthetic real Motion Photo, public API host.
  * This verifies lifecycle integration, not an actual Obsidian runtime. */
-export async function installPlaybackHost(page:Page,auto=false):Promise<void>{
+export async function installPlaybackHost(page:Page,auto=false,baseline=false):Promise<void>{
   await page.goto('/tests/browser/index.html');await page.addStyleTag({url:'/dist/styles.css'});
-  await page.evaluate(async(auto)=>{
-    const source=await(await fetch('/dist/main.js')).text(),bytes=await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer();
+  await page.evaluate(async({auto,baseline})=>{
+    const source=await(await fetch(baseline?'/dist/baseline/main.js':'/dist/main.js')).text(),bytes=await(await fetch('/dist/fixtures/motion.jpg')).arrayBuffer();
     const resource=URL.createObjectURL(new Blob([bytes]));const entries:any={post:[],extensions:[],events:[],writes:[]};
     class Component {
       private cleanups:Array<()=>void>=[];
@@ -25,5 +25,5 @@ export async function installPlaybackHost(page:Page,auto=false):Promise<void>{
     const plugin=new module.exports.default();plugin.app={vault:{adapter:{exists:async()=>false},getName:()=> 'CI-playback',getFiles:()=>[file,note],getAbstractFileByPath:(p:string)=>p===file.path?file:p===note.path?note:null,getResourcePath:(f:TFile)=>f===file?resource:resource+'-note',readBinary:async()=>bytes.slice(0),on:()=>({})},workspace:{containerEl:document.body,getLeavesOfType:()=>[],on:(name:string,fn:unknown)=>{entries.events.push({name,fn});return {}; }},metadataCache:{getFileCache:()=>({}),getFirstLinkpathDest:()=>file}};
     await plugin.onload();const image=()=>{const img=document.createElement('img');img.src=resource;img.width=240;img.height=240;return img;};
     Object.assign(window,{playbackHost:{plugin,entries,resource,file,note,image,infoField,liveField,close:()=>{plugin.unload();URL.revokeObjectURL(resource);}}});
-  },auto);
+  },{auto,baseline});
 }

@@ -16,6 +16,11 @@ describe('schema contract and override boundaries',()=>{
     for(const platform of ['desktop','android','ios']as const){expect(()=>validatePatch(defaults(platform))).not.toThrow();expect(()=>validateCombined(defaults(platform))).not.toThrow();}
   });
   it.each([NaN,Infinity,-1,4])('rejects invalid auto concurrency %s',v=>expect(()=>validatePatch({'auto.concurrent':v})).toThrow());
+  it('accepts all-visible concurrency and an explicit pressure policy without changing defaults',()=>{
+    const m=new SettingsModel({global:{'auto.concurrent':'all-visible','auto.lowResource':'keep-configured'}},'desktop');
+    expect(m.effective()['auto.concurrent']).toBe('all-visible');expect(defaults()['auto.concurrent']).toBe(1);
+    expect(()=>validatePatch({'auto.concurrent':'unlimited-ish'})).toThrow();
+  });
   it.each(['../photos','/photos','a//b','.obsidian/x','a\\b','x:y'])('rejects unsafe output %s',v=>expect(()=>safePath(v)).toThrow());
   it('protects native execution, safety settings and invalid note overrides',()=>{
     const m=new SettingsModel({global:{'settings.overrideNotes':true},photos:{'p.jpg':{'native.enabled':true,'auto.mode':'off'}}},'desktop');
