@@ -6,7 +6,7 @@ An independently implemented Obsidian plugin for photo-style Live Photo playback
 
 ## 当前状态 / Status
 
-0.1.5 候选开发版本。已实现检测、播放、113 项设置、离线编码器、分步压缩预览、备份和条件恢复；原始逐功能证据见[0.1.0 复检报告](docs/复检报告.md)，最新播放修复见[0.1.5 记录](docs/0.1.5-播放修复复检.md)，保存流程见[0.1.4 记录](docs/0.1.4-保存状态与原图替换.md)，150 张实拍证据仍见[0.1.2 记录](docs/0.1.2-修复复检.md)。实际 Obsidian、Android、iOS 和手机相册验收仍需用户确认。正式发行被设备验收门槛阻止。
+0.1.6 候选开发版本。已实现检测、播放、113 项设置、离线编码器、分步压缩预览、备份和条件恢复；原始逐功能证据见[0.1.0 复检报告](docs/复检报告.md)，最新放大播放修复见[0.1.6 记录](docs/0.1.6-放大对齐与同时播放.md)，首次加载修复见[0.1.5 记录](docs/0.1.5-播放修复复检.md)，保存流程见[0.1.4 记录](docs/0.1.4-保存状态与原图替换.md)，150 张实拍证据仍见[0.1.2 记录](docs/0.1.2-修复复检.md)。实际 Obsidian、Android、iOS 和手机相册验收仍需用户确认。正式发行被设备验收门槛阻止。
 
 This is a candidate, not a device-certified release. CI Chromium results do not establish Obsidian, Android/iOS or phone-gallery compatibility. Unsupported or unverified structures are protected and skipped with a reason.
 
