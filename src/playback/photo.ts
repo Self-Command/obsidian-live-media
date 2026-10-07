@@ -112,7 +112,7 @@ export class Photo {
       const possible=Math.min(e.boundingClientRect.width,bounds.width)*Math.min(e.boundingClientRect.height,bounds.height);
       this.ratio=e.isIntersecting&&possible>0?Math.min(1,e.intersectionRect.width*e.intersectionRect.height/possible):0;this.visibility();
     },{threshold:Array.from({length:51},(_,i)=>i/50)});
-    this.observer.observe(img);this.geometry=new PhotoGeometry(img,this.layer,this.video,parent);
+    this.observer.observe(img);this.geometry=new PhotoGeometry(img,this.layer,this.video,parent,this.badge,this.config);
     this.coordinator.photos.add(this);this.refresh();
   }
   private schedule(fn:()=>void,ms:number):ReturnType<typeof setTimeout> {const timer=setTimeout(()=>{this.timers.delete(timer);if(!this.abort.signal.aborted)fn();},ms);this.timers.add(timer);return timer;}
@@ -130,8 +130,7 @@ export class Photo {
     this.badge.style.borderRadius=String(c['badge.radiusPx'])+'px';
     this.badge.style.color=c['badge.color']==='theme'?'var(--text-normal)':String(c['badge.color']);
     this.badge.style.background=c['badge.background']==='theme'?'var(--background-primary)':String(c['badge.background']);
-    for(const side of ['top','bottom','left','right'] as const)this.badge.style[side]='auto';
-    for(const side of String(c['badge.position']).split('-'))this.badge.style.setProperty(side,String(c['badge.offsetPx'])+'px');
+    this.geometry.refresh();
     this.layer.classList.toggle('live-media-hover-badge',c['badge.visibility']==='hover-focus');
     if(c['accessibility.keyboard']){this.img.tabIndex=0;this.img.setAttribute('role','button');this.img.setAttribute('aria-label',(this.img.alt||'Live photo')+'; Enter plays, Escape stops');}
     else{this.restoreAttribute('tabindex',this.tabIndex);this.restoreAttribute('role',this.role);this.restoreAttribute('aria-label',this.aria);}

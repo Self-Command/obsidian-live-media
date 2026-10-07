@@ -1,7 +1,7 @@
 {
   "id": "live-media",
   "name": "Live Media",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "minAppVersion": "1.8.7",
   "description": "Photo-like live media playback and offline image compression with protected originals.",
   "author": "Self-Command",

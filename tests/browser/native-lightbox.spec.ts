@@ -91,3 +91,22 @@ test('all visible LIVE photos actually decode and play concurrently with silence
   await expect.poll(()=>page.locator('video').evaluateAll(videos=>videos.every(v=>(v as HTMLVideoElement).paused))).toBe(true);
   await page.evaluate(()=>(window as any).playbackHost.close());await expect(page.locator('video')).toHaveCount(0);
 });
+
+test('LIVE badge stays inset inside actual photo pixels, excluding lightbox padding and contain bars',async({page},info)=>{
+  await openLightbox(page);
+  await page.evaluate(()=>{const h=(window as any).playbackHost;h.viewer.img.style.transform='none';h.badgeInsets=()=>{
+    const img=h.viewer.img,style=getComputedStyle(img),r=img.getBoundingClientRect(),badge=img.parentElement.querySelector('.live-media-badge').getBoundingClientRect();
+    const sx=r.width/img.offsetWidth,sy=r.height/img.offsetHeight,pl=parseFloat(style.paddingLeft),pr=parseFloat(style.paddingRight),pt=parseFloat(style.paddingTop),pb=parseFloat(style.paddingBottom);
+    const w=img.clientWidth-pl-pr,h=img.clientHeight-pt-pb,k=Math.min(w/img.naturalWidth,h/img.naturalHeight),paintW=img.naturalWidth*k,paintH=img.naturalHeight*k;
+    return {right:(r.left+(pl+(w-paintW)/2+paintW)*sx-badge.right)/sx,top:(badge.top-(r.top+(pt+(h-paintH)/2)*sy))/sy};
+  };});
+  await expect.poll(()=>page.evaluate(()=>(window as any).playbackHost.badgeInsets().right)).toBeGreaterThan(7);
+  await expect.poll(()=>page.evaluate(()=>(window as any).playbackHost.badgeInsets().top)).toBeGreaterThan(7);
+  expect(await page.evaluate(()=>(window as any).playbackHost.badgeInsets().right)).toBeLessThan(9);
+  await page.locator('#full-size').click();await expect.poll(()=>page.locator('.lightbox video').evaluate(v=>(v as HTMLVideoElement).currentTime)).toBeGreaterThan(.05);
+  await page.evaluate(()=>{const h=(window as any).playbackHost;h.viewer.img.style.transform='translate(10px, 15px) scale(1.15)';h.plugin.model.set('badge.offsetPx',14);h.plugin.hosts.settingsChanged();});
+  await expect.poll(()=>page.evaluate(()=>(window as any).playbackHost.badgeInsets().right)).toBeGreaterThan(13);
+  expect(await page.evaluate(()=>(window as any).playbackHost.badgeInsets().top)).toBeLessThan(15);
+  await info.attach('LIVE-inset-inside-photo',{body:await page.screenshot(),contentType:'image/png'});
+  await page.evaluate(()=>(window as any).playbackHost.close());
+});
