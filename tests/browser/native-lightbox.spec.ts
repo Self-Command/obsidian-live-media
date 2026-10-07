@@ -81,7 +81,7 @@ test('viewer reparenting rebuilds the overlay and preserves native pan instead o
 test('all visible LIVE photos actually decode and play concurrently with silence then stop offscreen',async({page})=>{
   await installPlaybackHost(page,true);
   await page.evaluate(()=>{
-    const h=(window as any).playbackHost;h.plugin.model.set('auto.concurrent','all-visible');h.plugin.model.set('auto.lowResource','keep-configured');h.plugin.model.set('auto.loopCount','continuous');h.plugin.model.set('auto.durationMs','full');
+    const h=(window as any).playbackHost;h.plugin.model.set('auto.concurrent','all-visible');h.plugin.model.set('auto.lowResource','keep-configured');h.plugin.model.set('auto.loopCount',10);h.plugin.model.set('auto.durationMs','full');
     const root=document.createElement('div');root.className='markdown-reading-view';root.style.display='flex';document.body.append(root);h.concurrentRoot=root;
     for(let i=0;i<3;i++){const frame=document.createElement('div');const img=h.image();img.width=160;img.height=120;frame.append(img);root.append(frame);}h.entries.post[0](root,{sourcePath:'note.md',addChild:()=>{}});
   });
